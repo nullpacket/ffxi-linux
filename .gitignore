@@ -1,0 +1,9 @@
+/build*/
+/.cache/
+compile_commands.json
+__pycache__/
+/scripts/local.env
+/dist/
+/docs/index.html
+/docs/html/
+ci-out/

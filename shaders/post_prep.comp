@@ -1,0 +1,25 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#version 460
+// --post: the working buffer to linear HDR (inverse tone map) plus the volumetric light.
+#extension GL_GOOGLE_include_directive : require
+#include "post_common.glsl"
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(set = 0, binding = 0, rgba16f) uniform image2D work;
+layout(set = 0, binding = 1) uniform sampler2D volTex;
+
+void main()
+{
+    ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(px, ivec2(pc.size.xy))))
+    {
+        return;
+    }
+    vec4 c   = imageLoad(work, px);
+    vec3 hdr = acesInv(toLinear(c.rgb));
+    if ((flags() & (POST_FOG | POST_GODRAYS)) != 0u)
+    {
+        vec4 v = textureLod(volTex, (vec2(px) + 0.5) * pc.size.zw, 0.0);
+        hdr    = hdr * v.a + v.rgb;
+    }
+    imageStore(work, px, vec4(hdr, c.a));
+}

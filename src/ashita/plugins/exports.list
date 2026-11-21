@@ -1,0 +1,20 @@
+/* The Win32 stand-ins (win32.cpp) the client exports to natively built Ashita plugins (ld --dynamic-list). */
+{
+    CreateDirectoryA;
+    GetCurrentProcess;
+    GetCurrentProcessId;
+    GetLastError;
+    GetModuleHandleA;
+    GetTickCount;
+    GetTickCount64;
+    K32GetModuleInformation;
+    OutputDebugStringA;
+    QueryPerformanceCounter;
+    QueryPerformanceFrequency;
+    RegCloseKey;
+    RegOpenKeyExA;
+    RegQueryValueExA;
+    RegSetValueExA;
+    SetLastError;
+    Sleep;
+};

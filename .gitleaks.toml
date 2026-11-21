@@ -1,0 +1,16 @@
+# gitleaks for CI's check:secrets job (tools/ci/analysis.py secrets; docs/ci.md "Analysis"): the default rules
+# (GitLab / GitHub tokens, private keys, cloud keys, generic API keys ...) plus the local GitLab's tokens.
+title = "ffxi-linux"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "local-gitlab-token"
+description = "A token for the local GitLab (personal, project, runner or CI job token)"
+regex = '''\b(?:glpat|glrt|glcbt|glptt|gldt|glft|glsoat|glimt|glagent|GR1348941)-[0-9A-Za-z_\-]{20,}'''
+keywords = ["glpat", "glrt", "glcbt", "glptt", "gldt", "glft", "glsoat", "glimt", "glagent", "GR1348941"]
+
+[allowlist]
+description = "The local LSB dev server's documented default database login (docker compose, not a secret)"
+regexes = ['''-ppassword''', '''xiadmin''']

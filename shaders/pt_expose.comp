@@ -1,0 +1,72 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "pt_common.glsl"
+
+// --pathtrace (goal 41): the automatic exposure. One workgroup samples a 16 x 16 grid of the frame's traced light E
+// against the game's own lighting at the same pixels (ambient + light 0 / 1, as mesh.frag) and moves the exposure
+// toward the geometric mean of game / traced, partly (0.5 of it in log terms: a shaded scene stays darker than the game's, a lit
+// one brighter, so the traced contrast shows), smoothed over about a second. The composite multiplies E by it.
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(set = 0, binding = 2, rgba16f) uniform readonly image2D rawE;
+layout(set = 0, binding = 4, rgba16f) uniform readonly image2D aux;
+layout(set = 0, binding = 9, rgba16f) uniform readonly image2D filtA;
+
+layout(buffer_reference, std430) buffer Exposure { float v[4]; }; // v[0] the exposure, v[1] its target (debug)
+
+layout(push_constant) uniform Push
+{
+    PtParams p;
+    uint     pass;
+} pc;
+
+layout(set = 0, binding = 3, rgba16f) uniform readonly image2D albedo; // a = the first bounce ray reached the sky
+
+shared float sLog[256];
+shared float sN[256];
+shared float sOpen[256];
+
+void main()
+{
+    uint  i  = gl_LocalInvocationIndex;
+    ivec2 sz = ivec2(pc.p.size.xy);
+    ivec2 px = ivec2((vec2(gl_LocalInvocationID.xy) + 0.5) / 16.0 * vec2(sz));
+    vec4  a  = imageLoad(aux, px);
+    sLog[i]  = 0.0;
+    sN[i]    = 0.0;
+    sOpen[i] = 0.0;
+    if (a.x > 0.0)
+    {
+        vec3  n    = octDecode(a.yz);
+        vec3  game = pc.p.ambient.rgb + pc.p.light0Color.rgb * max(dot(n, normalize(pc.p.light0Dir.xyz)), 0.0) +
+                     pc.p.light1Color.rgb * max(dot(n, normalize(pc.p.light1Dir.xyz)), 0.0);
+        vec3  e    = (pc.p.opts.w & 2u) != 0u ? imageLoad(rawE, px).rgb : imageLoad(filtA, px).rgb;
+        sLog[i]    = log(max(luma(game), 0.01)) - log(max(luma(e), 0.01));
+        sN[i]      = 1.0;
+        sOpen[i]   = imageLoad(albedo, px).a;
+    }
+    barrier();
+    for (uint s = 128u; s > 0u; s >>= 1)
+    {
+        if (i < s)
+        {
+            sLog[i] += sLog[i + s];
+            sN[i] += sN[i + s];
+            sOpen[i] += sOpen[i + s];
+        }
+        barrier();
+    }
+    if (i == 0u)
+    {
+        Exposure ex     = Exposure(pc.p.exposure);
+        float    target = sN[0] > 0.0 ? exp(0.5 * sLog[0] / sN[0]) : 1.0;
+        target          = clamp(target, 0.6, 2.2);
+        float    cur    = ex.v[0];
+        ex.v[0]         = cur <= 0.0 || (pc.p.opts.w & 1u) != 0u ? target : mix(cur, target, 0.04);
+        ex.v[1]         = target;
+        // How much of the sky the frame sees (pt_trace.comp: the directional lights' shadows only count where it does).
+        float open      = sN[0] > 0.0 ? sOpen[0] / sN[0] : 1.0;
+        ex.v[2]         = ex.v[2] < 0.0 || (pc.p.opts.w & 1u) != 0u ? open : mix(ex.v[2], open, 0.05);
+    }
+}

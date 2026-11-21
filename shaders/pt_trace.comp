@@ -1,0 +1,437 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#version 460
+#extension GL_EXT_ray_query : require
+#extension GL_EXT_nonuniform_qualifier : require
+#extension GL_GOOGLE_include_directive : require
+#include "pt_common.glsl"
+
+// --pathtrace (goal 41 option 3): one path per pixel per frame. The visible surface is found by a primary ray against
+// the depth; its lighting is traced instead of the zone's baked vertex lighting: light 0 / 1 (sun / moon, the game's
+// colours and directions) and the zone's point lights with shadow rays, the sky (the zone's gradient at the game's
+// ambient level) by cosine-sampled rays, and N diffuse bounces (docs/enhanced-graphics.md).
+//
+// Output: E (the light that multiplies the surface's material: the game's "lit" term, traced), the material, and
+// view depth + normal for the filter. Characters and anything the primary ray does not match keep the drawn colour,
+// re-weighted by traced / game lighting (the composite's ratio mode).
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0) uniform accelerationStructureEXT tlas;
+layout(set = 0, binding = 1) uniform sampler2D depthTex;
+layout(set = 0, binding = 2, rgba16f) uniform writeonly image2D outE;      // rgb E, a = 1 traced material / 0 ratio
+layout(set = 0, binding = 3, rgba16f) uniform writeonly image2D outAlbedo; // rgb material (the game's units)
+layout(set = 0, binding = 4, rgba16f) uniform writeonly image2D outAux;    // view depth (clip w), oct normal, mode
+layout(set = 0, binding = 11, rgba8) uniform writeonly image2D guideAlbedo;
+layout(set = 0, binding = 12, rgba16f) uniform writeonly image2D guideNormal;
+layout(set = 0, binding = 13, rgba8) uniform writeonly image2D guideSpec;
+layout(set = 1, binding = 0) uniform sampler2D zoneTex[];
+layout(set = 2, binding = 0) uniform sampler2D subTex[];
+
+layout(buffer_reference, std430) readonly buffer ExposureR { float v[4]; }; // v[2]: how much of the sky the frame sees
+// How much the directional lights' traced shadows count. Outdoors 1. Under a roof (goal 38's roofed floor) and in a
+// zone where the sky hardly reaches (a cave, a dungeon: the share of first bounce rays that escape, over the last
+// frames, under 2-12 %) light 0 is the zone's fill light, not a sun, and shadowing it by the ceiling would black the
+// place out (the Bostaunieux Oubliette went black): it then lights unshadowed and the ambient fills, as in the game.
+float gShadowW;
+
+layout(buffer_reference, std430) readonly buffer U32 { uint v[]; };
+layout(buffer_reference, std430) readonly buffer F32 { float v[]; };
+
+layout(push_constant) uniform Push
+{
+    PtParams p;
+    uint     pass;
+} pc;
+
+// A per-pixel random sequence (PCG hash), new each frame.
+uint gRng;
+uint pcg(uint v)
+{
+    uint s = v * 747796405u + 2891336453u;
+    uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+    return (w >> 22u) ^ w;
+}
+float rnd()
+{
+    gRng = pcg(gRng);
+    return float(gRng) * (1.0 / 4294967296.0);
+}
+
+vec3 cosineDir(vec3 n, vec2 u)
+{
+    float r   = sqrt(u.x);
+    float phi = 6.2831853 * u.y;
+    vec3  t   = normalize(abs(n.y) < 0.99 ? cross(n, vec3(0, 1, 0)) : cross(n, vec3(1, 0, 0)));
+    vec3  b   = cross(n, t);
+    return normalize(t * (r * cos(phi)) + b * (r * sin(phi)) + n * sqrt(max(0.0, 1.0 - u.x)));
+}
+
+vec3 coneDir(vec3 d, vec2 u, float angle)
+{
+    vec3  t   = normalize(abs(d.y) < 0.99 ? cross(d, vec3(0, 1, 0)) : cross(d, vec3(1, 0, 0)));
+    vec3  b   = cross(d, t);
+    float r   = angle * sqrt(u.x);
+    float phi = 6.2831853 * u.y;
+    return normalize(d + t * (r * cos(phi)) + b * (r * sin(phi)));
+}
+
+uvec3 tri(Record r, int prim)
+{
+    U32  idx = U32(r.indices);
+    uint b   = uint(prim) * 3u;
+    return uvec3(idx.v[b], idx.v[b + 1u], idx.v[b + 2u]);
+}
+
+vec4 texel(Record r, vec2 uv)
+{
+    uint set = (r.flags >> 1) & 3u;
+    if (set == 0u)
+    {
+        return textureLod(zoneTex[nonuniformEXT(r.texture)], uv, 0.0);
+    }
+    if (set == 1u)
+    {
+        return textureLod(subTex[nonuniformEXT(r.texture)], uv, 0.0);
+    }
+    return vec4(0.5, 0.5, 0.5, 1.0);
+}
+
+// Alpha-tested ('_' models: the game's ALPHAREF 0x60) and blended pieces count only where mostly opaque (rt_trace.comp).
+bool candidateHits(rayQueryEXT q)
+{
+    int    cid = rayQueryGetIntersectionInstanceCustomIndexEXT(q, false);
+    int    gid = rayQueryGetIntersectionGeometryIndexEXT(q, false);
+    Record r   = pc.p.records.r[cid + gid];
+    if ((r.flags & 17u) == 0u)
+    {
+        return true;
+    }
+    uvec3 t  = tri(r, rayQueryGetIntersectionPrimitiveIndexEXT(q, false));
+    vec2  bc = rayQueryGetIntersectionBarycentricsEXT(q, false);
+    F32   vb = F32(r.vertices);
+    uint  st = r.stride / 4u;
+    vec2  uv = vec2(vb.v[t.x * st + 7u], vb.v[t.x * st + 8u]) * (1.0 - bc.x - bc.y) + vec2(vb.v[t.y * st + 7u], vb.v[t.y * st + 8u]) * bc.x +
+              vec2(vb.v[t.z * st + 7u], vb.v[t.z * st + 8u]) * bc.y;
+    float va = unpackUnorm4x8(floatBitsToUint(vb.v[t.x * st + 6u])).a;
+    float a  = clamp(4.0 * texel(r, uv).a * va, 0.0, 1.0);
+    return (r.flags & 1u) != 0u ? a > 96.0 / 255.0 : a > 0.5;
+}
+
+float visible(vec3 o, vec3 d, float tmax)
+{
+    rayQueryEXT q;
+    rayQueryInitializeEXT(q, tlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, o, 0.0, d, tmax);
+    while (rayQueryProceedEXT(q))
+    {
+        if (rayQueryGetIntersectionTypeEXT(q, false) == gl_RayQueryCandidateIntersectionTriangleEXT && candidateHits(q))
+        {
+            rayQueryConfirmIntersectionEXT(q);
+        }
+    }
+    return rayQueryGetIntersectionTypeEXT(q, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
+}
+
+// The material without the baked lighting. Zone vertex colours are near grey (xi-dat vcstats: chroma < 0.02; 64-90 %
+// within 0.75..1.0 of 0x80) and darken corners and undersides: baked shading, not tint. The game lights a surface
+// with 2 x tex x vc x lit (mesh.frag; vc 0x80 = 0.5), so with vc at 0x80 the material is tex; the vertex colour's
+// luminance is divided out (keeping the share `baked` of it) and its hue kept. Brighter than 0x80 (glowing pieces)
+// stays as the game has it.
+vec3 material(vec4 tex, vec4 vc)
+{
+    vec3  v = vc.rgb * 2.0;
+    float l = luma(v);
+    if (l <= 1.05)
+    {
+        v = v / max(l, 1e-3) * mix(1.0, max(l, 0.05), pc.p.ambient.w);
+    }
+    return clamp(tex.rgb * v, 0.0, 2.0);
+}
+
+struct Hit
+{
+    float t; // < 0 = miss
+    vec3  pos;
+    vec3  n;  // geometric, facing the ray
+    vec3  m;  // material (the game's units: lit surface = m x E)
+    bool  actor;
+};
+
+Hit closest(vec3 o, vec3 d, float tmax)
+{
+    Hit h;
+    h.t = -1.0, h.pos = o, h.n = -d, h.m = vec3(0.0), h.actor = false;
+    rayQueryEXT q;
+    rayQueryInitializeEXT(q, tlas, gl_RayFlagsNoneEXT, 0xFF, o, 0.0, d, tmax);
+    while (rayQueryProceedEXT(q))
+    {
+        if (rayQueryGetIntersectionTypeEXT(q, false) == gl_RayQueryCandidateIntersectionTriangleEXT && candidateHits(q))
+        {
+            rayQueryConfirmIntersectionEXT(q);
+        }
+    }
+    if (rayQueryGetIntersectionTypeEXT(q, true) == gl_RayQueryCommittedIntersectionNoneEXT)
+    {
+        return h;
+    }
+    h.t        = rayQueryGetIntersectionTEXT(q, true);
+    int    cid = rayQueryGetIntersectionInstanceCustomIndexEXT(q, true);
+    int    gid = rayQueryGetIntersectionGeometryIndexEXT(q, true);
+    Record r   = pc.p.records.r[cid + gid];
+    uvec3  tr  = tri(r, rayQueryGetIntersectionPrimitiveIndexEXT(q, true));
+    vec2   bc  = rayQueryGetIntersectionBarycentricsEXT(q, true);
+    F32    vb  = F32(r.vertices);
+    uint   st  = r.stride / 4u;
+    vec3   p0  = vec3(vb.v[tr.x * st], vb.v[tr.x * st + 1u], vb.v[tr.x * st + 2u]);
+    vec3   p1  = vec3(vb.v[tr.y * st], vb.v[tr.y * st + 1u], vb.v[tr.y * st + 2u]);
+    vec3   p2  = vec3(vb.v[tr.z * st], vb.v[tr.z * st + 1u], vb.v[tr.z * st + 2u]);
+    mat4x3 o2w = rayQueryGetIntersectionObjectToWorldEXT(q, true);
+    h.n        = normalize(mat3(o2w) * cross(p1 - p0, p2 - p0));
+    if (dot(h.n, d) > 0.0)
+    {
+        h.n = -h.n;
+    }
+    h.pos = o + d * h.t;
+    if ((r.flags & 8u) != 0u) // a character: positions only
+    {
+        h.m     = vec3(0.45);
+        h.actor = true;
+        return h;
+    }
+    float w0 = 1.0 - bc.x - bc.y;
+    vec2  uv = vec2(vb.v[tr.x * st + 7u], vb.v[tr.x * st + 8u]) * w0 + vec2(vb.v[tr.y * st + 7u], vb.v[tr.y * st + 8u]) * bc.x +
+              vec2(vb.v[tr.z * st + 7u], vb.v[tr.z * st + 8u]) * bc.y;
+    vec4 c   = unpackUnorm4x8(floatBitsToUint(vb.v[tr.x * st + 6u])) * w0 + unpackUnorm4x8(floatBitsToUint(vb.v[tr.y * st + 6u])) * bc.x +
+             unpackUnorm4x8(floatBitsToUint(vb.v[tr.z * st + 6u])) * bc.y;
+    h.m = material(texel(r, uv), c);
+    return h;
+}
+
+// The sky's light along a direction: the zone's gradient (sky.frag's colours), scaled so the open upper sky gives a
+// surface the game's ambient; below the horizon a dim ground term.
+vec3 skyLight(vec3 d)
+{
+    vec3 amb = pc.p.ambient.rgb;
+    if (d.y <= 0.0 || pc.p.skyNorm.x <= 0.0)
+    {
+        return d.y <= 0.0 ? amb * 0.35 : amb;
+    }
+    float e      = clamp(asin(clamp(d.y, 0.0, 1.0)) / 1.5707963, 0.0, 1.0);
+    float pos[8] = float[](pc.p.skyPos[0].x, pc.p.skyPos[0].y, pc.p.skyPos[0].z, pc.p.skyPos[0].w, pc.p.skyPos[1].x, pc.p.skyPos[1].y, pc.p.skyPos[1].z,
+                           pc.p.skyPos[1].w);
+    vec3 c = pc.p.sky[0].rgb;
+    for (int i = 0; i < 7; ++i)
+    {
+        if (e >= pos[i] && e <= pos[i + 1])
+        {
+            c = mix(pc.p.sky[i].rgb, pc.p.sky[i + 1].rgb, (e - pos[i]) / max(pos[i + 1] - pos[i], 1e-4));
+        }
+    }
+    if (e > pos[7])
+    {
+        c = pc.p.sky[7].rgb;
+    }
+    // The gradient's colour normalised to grey, times the ambient: the sky keeps its hue (bluer overhead, warmer low).
+    // Its level is the game's ambient x kSky: open ground then gets a little more than the game's ambient, so shade
+    // (where a canopy or a wall hides most of the sky) does not sink into black.
+    // Only kSkyHue of the gradient's hue: the stops are deep blues meant to be seen as sky, and as light they turned a
+    // grey city square blue (Southern San d'Oria 13:00); the game's ambient already carries the zone's tint.
+    const float kSky = 1.15, kSkyHue = 0.25;
+    return amb * mix(vec3(1.0), c * pc.p.skyNorm.x, kSkyHue) * kSky;
+}
+
+// Light 0 and light 1 at a point, with shadow rays (soft: a small cone).
+vec3 directional(vec3 x, vec3 n)
+{
+    vec3 o   = x + n * 0.04;
+    vec3 sum = vec3(0.0);
+    vec3 l0  = normalize(pc.p.light0Dir.xyz);
+    float c0 = dot(n, l0);
+    if (c0 > 0.0 && luma(pc.p.light0Color.rgb) > 0.002)
+    {
+        sum += pc.p.light0Color.rgb * c0 * mix(1.0, visible(o, coneDir(l0, vec2(rnd(), rnd()), 0.012), 400.0), gShadowW);
+    }
+    vec3  l1 = normalize(pc.p.light1Dir.xyz);
+    float c1 = dot(n, l1);
+    if (c1 > 0.0 && luma(pc.p.light1Color.rgb) > 0.002)
+    {
+        sum += pc.p.light1Color.rgb * c1 * mix(1.0, visible(o, coneDir(l1, vec2(rnd(), rnd()), 0.012), 400.0), gShadowW);
+    }
+    return sum;
+}
+
+// The zone's point lights (lamps, fires) at a point: the game's falloff (mesh.frag), the four strongest shadowed.
+vec3 pointLights(vec3 x, vec3 n)
+{
+    vec3 o      = x + n * 0.04;
+    vec3 sum    = vec3(0.0);
+    int  traced = 0;
+    for (uint i = 0u; i < pc.p.opts.y; ++i)
+    {
+        vec4  lp = pc.p.points[2u * i];
+        vec3  L  = lp.xyz - x;
+        float d2 = dot(L, L);
+        if (lp.w <= 0.0 || d2 > lp.w * lp.w || d2 < 1e-4)
+        {
+            continue;
+        }
+        vec3 c = pc.p.points[2u * i + 1u].rgb * max(dot(L, n), 0.0) * inversesqrt(d2) / d2;
+        if (luma(c) <= 0.0)
+        {
+            continue;
+        }
+        if (traced < 4 && luma(c) > 0.004)
+        {
+            float len = sqrt(d2);
+            c *= visible(o, coneDir(L / len, vec2(rnd(), rnd()), 0.05), max(len - 0.3, 0.0));
+            ++traced;
+        }
+        sum += c;
+    }
+    return sum;
+}
+
+// The point lights at a bounce: all of them unshadowed (cheap), one picked in proportion to its share and shadowed;
+// the sum is scaled by that one's visibility (an unbiased one-sample estimate: lamps light the walls the bounce sees).
+vec3 pointLightsSampled(vec3 x, vec3 n)
+{
+    vec3  total = vec3(0.0), pick = vec3(0.0), pickL = vec3(0.0);
+    float wsum  = 0.0;
+    for (uint i = 0u; i < pc.p.opts.y; ++i)
+    {
+        vec4  lp = pc.p.points[2u * i];
+        vec3  L  = lp.xyz - x;
+        float d2 = dot(L, L);
+        if (lp.w <= 0.0 || d2 > lp.w * lp.w || d2 < 1e-4)
+        {
+            continue;
+        }
+        vec3  c = pc.p.points[2u * i + 1u].rgb * max(dot(L, n), 0.0) * inversesqrt(d2) / d2;
+        float w = luma(c);
+        if (w <= 0.0)
+        {
+            continue;
+        }
+        total += c;
+        wsum += w;
+        if (rnd() * wsum <= w) // weighted reservoir: keeps light i with probability w / sum
+        {
+            pick  = c;
+            pickL = L;
+        }
+    }
+    if (wsum <= 0.0)
+    {
+        return vec3(0.0);
+    }
+    float len = length(pickL);
+    return total * visible(x + n * 0.04, pickL / len, max(len - 0.3, 0.0));
+}
+
+vec3 normalAt(ivec2 px, vec3 p, vec2 inv)
+{
+    ivec2 sz = ivec2(pc.p.size.xy);
+    vec2  uv = (vec2(px) + 0.5) * inv;
+    float dl = texelFetch(depthTex, clamp(px - ivec2(1, 0), ivec2(0), sz - 1), 0).r;
+    float dr = texelFetch(depthTex, clamp(px + ivec2(1, 0), ivec2(0), sz - 1), 0).r;
+    float du = texelFetch(depthTex, clamp(px - ivec2(0, 1), ivec2(0), sz - 1), 0).r;
+    float dd = texelFetch(depthTex, clamp(px + ivec2(0, 1), ivec2(0), sz - 1), 0).r;
+    vec3  pl = ptWorldAt(pc.p, uv - vec2(inv.x, 0), dl), pr = ptWorldAt(pc.p, uv + vec2(inv.x, 0), dr);
+    vec3  pu = ptWorldAt(pc.p, uv - vec2(0, inv.y), du), pd = ptWorldAt(pc.p, uv + vec2(0, inv.y), dd);
+    vec3  dx = distance(p, pl) < distance(p, pr) ? p - pl : pr - p;
+    vec3  dy = distance(p, pu) < distance(p, pd) ? p - pu : pd - p;
+    vec3  n  = normalize(cross(dy, dx));
+    if (dot(n, pc.p.eye.xyz - p) < 0.0)
+    {
+        n = -n;
+    }
+    return n;
+}
+
+void main()
+{
+    ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(px, ivec2(pc.p.size.xy))))
+    {
+        return;
+    }
+    gRng = pcg(uint(px.x) + uint(px.y) * 7919u + pcg(pc.p.opts.z) * 104729u);
+    float open = ExposureR(pc.p.exposure).v[2];
+    gShadowW   = pc.p.fogStart.w * (open < 0.0 ? 1.0 : clamp((open - 0.02) / 0.1, 0.0, 1.0));
+    float d = texelFetch(depthTex, px, 0).r;
+    if (d <= 0.0) // the sky
+    {
+        imageStore(outE, px, vec4(0.0));
+        imageStore(outAlbedo, px, vec4(0.0));
+        imageStore(outAux, px, vec4(0.0));
+        imageStore(guideAlbedo, px, vec4(0.0));
+        imageStore(guideNormal, px, vec4(0.0, 1.0, 0.0, 1.0));
+        imageStore(guideSpec, px, vec4(0.0));
+        return;
+    }
+    vec2  inv  = pc.p.size.zw;
+    vec2  uv   = (vec2(px) + 0.5) * inv;
+    vec3  p    = ptWorldAt(pc.p, uv, d);
+    vec3  eye  = pc.p.eye.xyz;
+    float dist = distance(p, eye);
+    vec3  v    = (p - eye) / max(dist, 1e-4);
+
+    // The visible surface: the primary ray's hit where it agrees with the depth (else the drawn colour is kept and
+    // re-weighted: characters, blended surfaces over it).
+    Hit  ph   = closest(eye, v, dist * 1.03 + 0.2);
+    bool mine = ph.t >= 0.0 && abs(ph.t - dist) < 0.02 * dist + 0.08;
+    vec3 n    = mine ? ph.n : normalAt(px, p, inv);
+    vec3 x    = mine ? ph.pos : p;
+    bool traced = mine && !ph.actor;
+    vec3 m      = traced ? ph.m : vec3(0.0);
+
+    // Direct light at the visible point, then the paths: sky through the gaps, bounces off what is around.
+    vec3 E = directional(x, n) + pointLights(x, n);
+    vec3 T  = vec3(1.0);
+    vec3 xn = n;
+    vec3 xo = x + n * (0.03 + dist * 0.0015);
+    uint  bounces = pc.p.opts.x;
+    float firstT  = 1e9;
+    for (uint b = 0u; b < bounces; ++b)
+    {
+        vec3 dir = cosineDir(xn, vec2(rnd(), rnd()));
+        Hit  h   = closest(xo, dir, 120.0);
+        if (b == 0u)
+        {
+            firstT = h.t < 0.0 ? 1e9 : h.t;
+        }
+        if (h.t < 0.0)
+        {
+            E += T * skyLight(dir);
+            break;
+        }
+        // Light carried by the game's colours (they are display values): the reflectance is their linear value.
+        vec3 rho = clamp(pow(h.m, vec3(2.2)), 0.0, 0.9);
+        T *= rho;
+        E += T * (directional(h.pos, h.n) + pointLightsSampled(h.pos, h.n));
+        if (b + 1u == bounces)
+        {
+            E += T * pc.p.ambient.rgb; // what further bounces and the sky would add: the game's ambient
+        }
+        xn = h.n;
+        xo = h.pos + h.n * 0.04;
+        if (luma(T) < 0.002)
+        {
+            break;
+        }
+    }
+    // Indoors the zone's ambient is the room's fill light (the sky cannot reach in): it stays, darkened only by what
+    // is close (the first ray's hit within 2 yalms), as much as light 0's shadow is faded.
+    E += pc.p.ambient.rgb * (1.0 - gShadowW) * clamp(firstT / 2.0, 0.0, 1.0);
+    // A floor of the game's ambient everywhere: light the geometry cannot carry (scattered through leaves the game models
+    // as solid canopies, the bounces past the last). Without it the forest floor under West Ronfaure's trees at 13:00 in
+    // clear weather fell to half the game's brightness even after the exposure.
+    const float kFloor = 0.25;
+    E += pc.p.ambient.rgb * kFloor;
+
+    float viewW = (pc.p.viewProj * vec4(x, 1.0)).w;
+    imageStore(outE, px, vec4(E, traced ? 1.0 : 0.0));
+    imageStore(outAlbedo, px, vec4(m, firstT > 1e8 ? 1.0 : 0.0));
+    imageStore(outAux, px, vec4(viewW, octEncode(n), traced ? 1.0 : 0.0));
+    imageStore(guideAlbedo, px, vec4(traced ? clamp(m, 0.0, 1.0) : vec3(0.5), 1.0));
+    imageStore(guideNormal, px, vec4(n, 1.0));
+    imageStore(guideSpec, px, vec4(0.04, 0.04, 0.04, 1.0));
+}

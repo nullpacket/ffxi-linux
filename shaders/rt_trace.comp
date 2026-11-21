@@ -1,0 +1,395 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#version 460
+#extension GL_EXT_ray_query : require
+#extension GL_EXT_nonuniform_qualifier : require
+#extension GL_GOOGLE_include_directive : require
+#include "rt_common.glsl"
+
+// --rt (goal 38): per pixel of the scene depth, ambient occlusion, sun / moon visibility, zone point-light visibility
+// and one diffuse bounce, traced with ray queries against the frame's TLAS (docs/raytracing.md).
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0) uniform accelerationStructureEXT tlas;
+layout(set = 0, binding = 1) uniform sampler2D depthTex;
+layout(set = 0, binding = 2, rgba16f) uniform writeonly image2D outA; // ao, sun visibility, oct normal
+layout(set = 0, binding = 3, rgba16f) uniform writeonly image2D outB; // bounce rgb, view depth (clip w)
+layout(set = 0, binding = 4, rgba16f) uniform writeonly image2D outC; // point lights' rgb, visible fraction
+layout(set = 0, binding = 5, rgba16f) uniform writeonly image2D outD; // water reflection rgb, weight
+layout(set = 1, binding = 0) uniform sampler2D zoneTex[];
+layout(set = 2, binding = 0) uniform sampler2D subTex[];
+
+layout(buffer_reference, std430) readonly buffer U32 { uint v[]; };
+layout(buffer_reference, std430) readonly buffer F32 { float v[]; };
+
+layout(push_constant) uniform Push
+{
+    Params p;
+    uint   pass;
+} pc;
+
+// Interleaved gradient noise, moved each frame (R2): low-discrepancy samples the temporal filter averages well.
+vec2 noise2(uvec2 px, uint k)
+{
+    float f  = float(pc.p.opts.z % 64u) + float(k) * 7.0;
+    float a  = fract(52.9829189 * fract(0.06711056 * (float(px.x) + 5.588238 * f) + 0.00583715 * (float(px.y) + 5.588238 * f)));
+    float b  = fract(52.9829189 * fract(0.06711056 * (float(px.y) + 3.177 * f + 11.0) + 0.00583715 * (float(px.x) + 7.31 * f)));
+    return vec2(a, b);
+}
+
+vec3 cosineDir(vec3 n, vec2 u)
+{
+    float r   = sqrt(u.x);
+    float phi = 6.2831853 * u.y;
+    vec3  t   = normalize(abs(n.y) < 0.99 ? cross(n, vec3(0, 1, 0)) : cross(n, vec3(1, 0, 0)));
+    vec3  b   = cross(n, t);
+    return normalize(t * (r * cos(phi)) + b * (r * sin(phi)) + n * sqrt(max(0.0, 1.0 - u.x)));
+}
+
+vec3 coneDir(vec3 d, vec2 u, float angle)
+{
+    vec3  t   = normalize(abs(d.y) < 0.99 ? cross(d, vec3(0, 1, 0)) : cross(d, vec3(1, 0, 0)));
+    vec3  b   = cross(d, t);
+    float r   = angle * sqrt(u.x);
+    float phi = 6.2831853 * u.y;
+    return normalize(d + t * (r * cos(phi)) + b * (r * sin(phi)));
+}
+
+// Triangle data of a record: the three vertex indices.
+uvec3 tri(Record r, int prim)
+{
+    U32 idx = U32(r.indices);
+    uint b  = uint(prim) * 3u;
+    return uvec3(idx.v[b], idx.v[b + 1u], idx.v[b + 2u]);
+}
+
+vec4 texel(Record r, vec2 uv)
+{
+    uint set = (r.flags >> 1) & 3u;
+    if (set == 0u)
+    {
+        return textureLod(zoneTex[nonuniformEXT(r.texture)], uv, 0.0);
+    }
+    if (set == 1u)
+    {
+        return textureLod(subTex[nonuniformEXT(r.texture)], uv, 0.0);
+    }
+    return vec4(0.5, 0.5, 0.5, 1.0);
+}
+
+// Alpha-tested foliage (models named '_'): the hit counts only where the texture passes ALPHAREF 0x60 (mesh.frag).
+bool candidateHits(rayQueryEXT q)
+{
+    int    cid = rayQueryGetIntersectionInstanceCustomIndexEXT(q, false);
+    int    gid = rayQueryGetIntersectionGeometryIndexEXT(q, false);
+    Record r   = pc.p.records.r[cid + gid];
+    if ((r.flags & 17u) == 0u)
+    {
+        return true;
+    }
+    uvec3 t  = tri(r, rayQueryGetIntersectionPrimitiveIndexEXT(q, false));
+    vec2  bc = rayQueryGetIntersectionBarycentricsEXT(q, false);
+    F32   vb = F32(r.vertices);
+    uint  st = r.stride / 4u;
+    vec2  uv = vec2(vb.v[t.x * st + 7u], vb.v[t.x * st + 8u]) * (1.0 - bc.x - bc.y) + vec2(vb.v[t.y * st + 7u], vb.v[t.y * st + 8u]) * bc.x +
+              vec2(vb.v[t.z * st + 7u], vb.v[t.z * st + 8u]) * bc.y;
+    float va = unpackUnorm4x8(floatBitsToUint(vb.v[t.x * st + 6u])).a;
+    // Alpha-tested: the game's ALPHAREF 0x60. Blended (foliage cards, glass, water): an occluder where it is mostly
+    // opaque, so leaves shade and the gaps between them let light through.
+    float a = clamp(4.0 * texel(r, uv).a * va, 0.0, 1.0);
+    return (r.flags & 1u) != 0u ? a > 96.0 / 255.0 : a > 0.5;
+}
+
+// 1 = nothing in the way.
+float visible(vec3 o, vec3 d, float tmax)
+{
+    rayQueryEXT q;
+    rayQueryInitializeEXT(q, tlas, gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, o, 0.0, d, tmax);
+    while (rayQueryProceedEXT(q))
+    {
+        if (rayQueryGetIntersectionTypeEXT(q, false) == gl_RayQueryCandidateIntersectionTriangleEXT && candidateHits(q))
+        {
+            rayQueryConfirmIntersectionEXT(q);
+        }
+    }
+    return rayQueryGetIntersectionTypeEXT(q, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
+}
+
+// Closest hit; t < 0 = miss. Fills the hit's world position, normal (facing the ray) and albedo.
+float closest(vec3 o, vec3 d, float tmax, out vec3 hp, out vec3 hn, out vec3 albedo)
+{
+    rayQueryEXT q;
+    rayQueryInitializeEXT(q, tlas, gl_RayFlagsNoneEXT, 0xFF, o, 0.0, d, tmax);
+    while (rayQueryProceedEXT(q))
+    {
+        if (rayQueryGetIntersectionTypeEXT(q, false) == gl_RayQueryCandidateIntersectionTriangleEXT && candidateHits(q))
+        {
+            rayQueryConfirmIntersectionEXT(q);
+        }
+    }
+    hp = o, hn = -d, albedo = vec3(0.0);
+    if (rayQueryGetIntersectionTypeEXT(q, true) == gl_RayQueryCommittedIntersectionNoneEXT)
+    {
+        return -1.0;
+    }
+    float  t   = rayQueryGetIntersectionTEXT(q, true);
+    int    cid = rayQueryGetIntersectionInstanceCustomIndexEXT(q, true);
+    int    gid = rayQueryGetIntersectionGeometryIndexEXT(q, true);
+    Record r   = pc.p.records.r[cid + gid];
+    uvec3  tr  = tri(r, rayQueryGetIntersectionPrimitiveIndexEXT(q, true));
+    vec2   bc  = rayQueryGetIntersectionBarycentricsEXT(q, true);
+    F32    vb  = F32(r.vertices);
+    uint   st  = r.stride / 4u;
+    vec3   p0  = vec3(vb.v[tr.x * st], vb.v[tr.x * st + 1u], vb.v[tr.x * st + 2u]);
+    vec3   p1  = vec3(vb.v[tr.y * st], vb.v[tr.y * st + 1u], vb.v[tr.y * st + 2u]);
+    vec3   p2  = vec3(vb.v[tr.z * st], vb.v[tr.z * st + 1u], vb.v[tr.z * st + 2u]);
+    mat4x3 o2w = rayQueryGetIntersectionObjectToWorldEXT(q, true);
+    hn         = normalize(mat3(o2w) * cross(p1 - p0, p2 - p0));
+    if (dot(hn, d) > 0.0)
+    {
+        hn = -hn;
+    }
+    hp = o + d * t;
+    if ((r.flags & 8u) != 0u)
+    {
+        albedo = vec3(0.45); // characters: no texture fetch here
+        return t;
+    }
+    float w0 = 1.0 - bc.x - bc.y;
+    vec2  uv = vec2(vb.v[tr.x * st + 7u], vb.v[tr.x * st + 8u]) * w0 + vec2(vb.v[tr.y * st + 7u], vb.v[tr.y * st + 8u]) * bc.x +
+              vec2(vb.v[tr.z * st + 7u], vb.v[tr.z * st + 8u]) * bc.y;
+    vec4 c   = unpackUnorm4x8(floatBitsToUint(vb.v[tr.x * st + 6u])) * w0 + unpackUnorm4x8(floatBitsToUint(vb.v[tr.y * st + 6u])) * bc.x +
+             unpackUnorm4x8(floatBitsToUint(vb.v[tr.z * st + 6u])) * bc.y;
+    // The game's material: MODULATE2X(texture, vertex colour), as mesh.frag.
+    albedo = clamp(2.0 * texel(r, uv).rgb * c.rgb, 0.0, 1.0);
+    return t;
+}
+
+// The nearest blended, near-level surface along a ray (water: drawn blended, so not in the depth). t < 0 = none.
+float waterAlong(vec3 o, vec3 d, float tmax, out vec3 wn)
+{
+    rayQueryEXT q;
+    rayQueryInitializeEXT(q, tlas, gl_RayFlagsNoneEXT, 0x01, o, 0.0, d, tmax);
+    while (rayQueryProceedEXT(q))
+    {
+        if (rayQueryGetIntersectionTypeEXT(q, false) != gl_RayQueryCandidateIntersectionTriangleEXT)
+        {
+            continue;
+        }
+        int    cid = rayQueryGetIntersectionInstanceCustomIndexEXT(q, false);
+        int    gid = rayQueryGetIntersectionGeometryIndexEXT(q, false);
+        Record r   = pc.p.records.r[cid + gid];
+        if ((r.flags & 16u) == 0u)
+        {
+            continue;
+        }
+        uvec3  t   = tri(r, rayQueryGetIntersectionPrimitiveIndexEXT(q, false));
+        F32    vb  = F32(r.vertices);
+        uint   st  = r.stride / 4u;
+        vec3   p0  = vec3(vb.v[t.x * st], vb.v[t.x * st + 1u], vb.v[t.x * st + 2u]);
+        vec3   p1  = vec3(vb.v[t.y * st], vb.v[t.y * st + 1u], vb.v[t.y * st + 2u]);
+        vec3   p2  = vec3(vb.v[t.z * st], vb.v[t.z * st + 1u], vb.v[t.z * st + 2u]);
+        mat4x3 o2w = rayQueryGetIntersectionObjectToWorldEXT(q, false);
+        vec3   n   = normalize(mat3(o2w) * cross(p1 - p0, p2 - p0));
+        if (abs(n.y) > 0.9)
+        {
+            rayQueryConfirmIntersectionEXT(q);
+        }
+    }
+    wn       = vec3(0.0, 1.0, 0.0);
+    float tb = rayQueryGetIntersectionTypeEXT(q, true) == gl_RayQueryCommittedIntersectionNoneEXT ? -1.0 : rayQueryGetIntersectionTEXT(q, true);
+    // The zone's level water from the collision (a harbour's sea is an effect mesh, not in the traced geometry): the
+    // ray coming down onto a plane inside its box.
+    int nw = int(pc.p.fogStart.z);
+    if (d.y < -1e-4)
+    {
+        for (int i = 0; i < nw; ++i)
+        {
+            vec4  box = pc.p.water[2 * i];
+            float y   = pc.p.water[2 * i + 1].x;
+            float t   = (y - o.y) / d.y;
+            if (t <= 0.0 || t >= tmax || (tb >= 0.0 && t >= tb))
+            {
+                continue;
+            }
+            vec2 h = o.xz + d.xz * t;
+            if (all(greaterThanEqual(h, box.xy)) && all(lessThanEqual(h, box.zw)))
+            {
+                tb = t;
+            }
+        }
+    }
+    return tb;
+}
+
+vec3 normalAt(ivec2 px, vec3 p, vec2 inv)
+{
+    // From the depth: the smaller of the two differences each way keeps edges out of the normal.
+    ivec2 sz = ivec2(pc.p.size.xy);
+    vec2  uv = (vec2(px) + 0.5) * inv;
+    float dl = texelFetch(depthTex, clamp(px - ivec2(1, 0), ivec2(0), sz - 1), 0).r;
+    float dr = texelFetch(depthTex, clamp(px + ivec2(1, 0), ivec2(0), sz - 1), 0).r;
+    float du = texelFetch(depthTex, clamp(px - ivec2(0, 1), ivec2(0), sz - 1), 0).r;
+    float dd = texelFetch(depthTex, clamp(px + ivec2(0, 1), ivec2(0), sz - 1), 0).r;
+    vec3  pl = worldAt(pc.p, uv - vec2(inv.x, 0), dl), pr = worldAt(pc.p, uv + vec2(inv.x, 0), dr);
+    vec3  pu = worldAt(pc.p, uv - vec2(0, inv.y), du), pd = worldAt(pc.p, uv + vec2(0, inv.y), dd);
+    vec3  dx = distance(p, pl) < distance(p, pr) ? p - pl : pr - p;
+    vec3  dy = distance(p, pu) < distance(p, pd) ? p - pu : pd - p;
+    vec3  n  = normalize(cross(dy, dx));
+    if (dot(n, pc.p.eye.xyz - p) < 0.0)
+    {
+        n = -n;
+    }
+    return n;
+}
+
+// The water reflection along the view ray (e, v) up to tmax: rgb = the mirrored scene shaded as the bounce under the
+// fog, a = its weight (0 = no water). A reflection's weight starts at kWaterMin, the game's water being a flat painted
+// sheet that shows the sky even looked at from above, and rises with Schlick's Fresnel term toward grazing views.
+const float kWaterMin = 0.4;
+vec4 waterReflection(vec3 e, vec3 v, float tmax)
+{
+    vec3  wn;
+    float tw = waterAlong(e, v, tmax, wn);
+    if (tw <= 0.0)
+    {
+        return vec4(0.0);
+    }
+    vec3  l0 = normalize(pc.p.light0Dir.xyz);
+    vec3  wp = e + v * tw;
+    vec3  rd = reflect(v, wn);
+    vec3  hp, hn, albedo;
+    vec3  col;
+    float t  = closest(wp + wn * 0.05, rd, 120.0, hp, hn, albedo);
+    if (t >= 0.0)
+    {
+        vec3 irr = pc.p.ambient.rgb + pc.p.light0Color.rgb * max(dot(hn, l0), 0.0) + pc.p.light1Color.rgb * max(dot(hn, normalize(pc.p.light1Dir.xyz)), 0.0);
+        col      = albedo * clamp(irr, 0.0, 1.0);
+        float f  = clamp((pc.p.fogColorEnd.w - (tw + t)) / max(pc.p.fogColorEnd.w - pc.p.fogStart.x, 1e-3), 0.0, 1.0);
+        col      = mix(pc.p.fogColorEnd.rgb, col, f);
+    }
+    else
+    {
+        col = pc.p.fogColorEnd.rgb; // the sky as the fog colour the game clears to
+    }
+    float fres = 0.02 + 0.98 * pow(1.0 - max(dot(-v, wn), 0.0), 5.0); // Schlick, water F0 0.02
+    return vec4(col, mix(kWaterMin, 1.0, fres));
+}
+
+void main()
+{
+    ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(px, ivec2(pc.p.size.xy))))
+    {
+        return;
+    }
+    float d = texelFetch(depthTex, px, 0).r;
+    if (d <= 0.0) // the sky (reversed depth clears to 0)
+    {
+        imageStore(outA, px, vec4(1.0, 1.0, 0.0, 0.0));
+        imageStore(outB, px, vec4(0.0));
+        imageStore(outC, px, vec4(0.0, 0.0, 0.0, 1.0));
+        // Open water over nothing (a harbour or the sea with no floor drawn under it): the water is blended, so it is
+        // not in the depth; trace the view ray to the fog's end for it.
+        vec4 refl = vec4(0.0);
+        if ((pc.p.opts.x & RT_REFLECT) != 0u)
+        {
+            vec2 uv = (vec2(px) + 0.5) * pc.p.size.zw;
+            vec3 v  = normalize(worldAt(pc.p, uv, 0.5) - pc.p.eye.xyz);
+            refl    = waterReflection(pc.p.eye.xyz, v, max(pc.p.fogColorEnd.w, 50.0));
+        }
+        imageStore(outD, px, refl);
+        return;
+    }
+    vec2  inv   = pc.p.size.zw;
+    vec2  uv    = (vec2(px) + 0.5) * inv;
+    vec3  p     = worldAt(pc.p, uv, d);
+    vec3  n     = normalAt(px, p, inv);
+    float dist  = distance(p, pc.p.eye.xyz);
+    vec3  o     = p + n * (0.03 + dist * 0.0015);
+    uint  fx    = pc.p.opts.x;
+    float viewW = (pc.p.viewProj * vec4(p, 1.0)).w;
+
+    float ao = 1.0;
+    if ((fx & RT_AO) != 0u)
+    {
+        const int   kRays = 2; // the temporal filter accumulates them
+        float       kR    = pc.p.tune.w; // yalms (1.6; `--rt-boost` widens it)
+        float       occ   = 0.0;
+        for (int i = 0; i < kRays; ++i)
+        {
+            vec3 dir = cosineDir(n, noise2(uvec2(px), uint(i)));
+            vec3 hp, hn, al;
+            float t = closest(o, dir, kR, hp, hn, al);
+            occ += t >= 0.0 ? 1.0 - t / kR : 0.0;
+        }
+        ao = 1.0 - occ / float(kRays);
+    }
+
+    float vis = 1.0;
+    vec3  l0  = normalize(pc.p.light0Dir.xyz);
+    if ((fx & RT_SHADOWS) != 0u && luma(pc.p.light0Color.rgb) > 0.005 && dot(n, l0) > 0.0)
+    {
+        // A small cone (the soft edge the filter averages): sun and moon are both ~0.5 degrees, a little more reads better.
+        vis = visible(o, coneDir(l0, noise2(uvec2(px), 7u), 0.025), 400.0);
+    }
+
+    vec3  pointTotal = vec3(0.0);
+    float pointFrac  = 1.0;
+    if ((fx & RT_POINTS) != 0u && pc.p.opts.y > 0u)
+    {
+        vec3 seen = vec3(0.0);
+        int  traced = 0;
+        for (uint i = 0u; i < pc.p.opts.y; ++i)
+        {
+            vec4  lp = pc.p.points[2u * i];
+            vec3  L  = lp.xyz - p;
+            float d2 = dot(L, L);
+            if (lp.w <= 0.0 || d2 > lp.w * lp.w || d2 < 1e-4)
+            {
+                continue;
+            }
+            vec3 c = pc.p.points[2u * i + 1u].rgb * max(dot(L, n), 0.0) * inversesqrt(d2) / d2; // as mesh.frag
+            if (luma(c) <= 0.0)
+            {
+                continue;
+            }
+            pointTotal += c;
+            if (traced < 4 && luma(c) > 0.004)
+            {
+                float len = sqrt(d2);
+                vec3  jl  = coneDir(L / len, noise2(uvec2(px), 11u + i), 0.05);
+                seen += c * visible(o, jl, max(len - 0.3, 0.0));
+                ++traced;
+            }
+            else
+            {
+                seen += c;
+            }
+        }
+        pointFrac = luma(pointTotal) > 1e-5 ? luma(seen) / luma(pointTotal) : 1.0;
+    }
+
+    vec3 bounce = vec3(0.0);
+    if ((fx & RT_GI) != 0u)
+    {
+        vec3 dir = cosineDir(n, noise2(uvec2(px), 3u));
+        vec3 hp, hn, albedo;
+        float t = closest(o, dir, 24.0, hp, hn, albedo);
+        if (t >= 0.0)
+        {
+            // The hit lit as the game lights the zone: ambient + light 0 (shadowed) + light 1.
+            vec3 ho  = hp + hn * 0.05;
+            float s  = luma(pc.p.light0Color.rgb) > 0.005 && dot(hn, l0) > 0.0 ? visible(ho, l0, 400.0) : 0.0;
+            vec3 irr = pc.p.ambient.rgb + pc.p.light0Color.rgb * max(dot(hn, l0), 0.0) * s +
+                       pc.p.light1Color.rgb * max(dot(hn, normalize(pc.p.light1Dir.xyz)), 0.0);
+            bounce   = albedo * clamp(irr, 0.0, 1.0);
+        }
+    }
+
+    // Water: the view ray's blended level surface before the opaque depth, mirrored once and shaded as the bounce.
+    vec4 refl = (fx & RT_REFLECT) != 0u ? waterReflection(pc.p.eye.xyz, normalize(p - pc.p.eye.xyz), dist - 0.05) : vec4(0.0);
+    imageStore(outD, px, refl);
+    imageStore(outA, px, vec4(ao, vis, octEncode(n)));
+    imageStore(outB, px, vec4(bounce, viewW));
+    imageStore(outC, px, vec4(pointTotal, pointFrac));
+}

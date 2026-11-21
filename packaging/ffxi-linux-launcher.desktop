@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ffxi-linux launcher
+GenericName=Game launcher
+Comment=Choose a server, set the graphics and connect with the native Linux client for FINAL FANTASY XI
+Exec=xi-launcher
+Icon=applications-games
+Terminal=false
+Categories=Game;RolePlaying;

@@ -1,0 +1,5 @@
+# Files the check:secrets job's forbidden-file check accepts although their type is on its list (tools/ci/analysis.py
+# FORBIDDEN_*). Only our own work: never Square Enix data, screenshots, captures, NVIDIA binaries or third-party code.
+# One glob per line (fnmatch, matched against the repo path).
+docs/branding/logo.png            # our logo
+docs/branding/logo-mark-512.png   # our logo mark

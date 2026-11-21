@@ -1,0 +1,23 @@
+{
+ "tool": "sast",
+ "total": 58,
+ "findings": {
+  "flawfinder.execv|src/dat/hd_textures.cpp|This causes a new program to execute and is difficult to use safely (CWE-N). (CWE CWE-N)": 1,
+  "flawfinder.popen|src/ashita/d3d8_emu.cpp|This causes a new program to execute and is difficult to use safely (CWE-N). (CWE CWE-N)": 1,
+  "flawfinder.popen|src/ashita/lua_imgui.cpp|This causes a new program to execute and is difficult to use safely (CWE-N). (CWE CWE-N)": 1,
+  "flawfinder.popen|src/ashita/lua_native.cpp|This causes a new program to execute and is difficult to use safely (CWE-N). (CWE CWE-N)": 1,
+  "semgrep.reinterpret-cast-read|src/ashita/lua_imgui.cpp|Reading through a reinterpret_cast pointer into a byte buffer is unaligned / aliasing undefined behaviour on packet and DAT data. Use the load<T>() helpers (xi/bytes.h) or std::memcpy / std::bit_cast.": 8,
+  "semgrep.reinterpret-cast-read|src/net/socket.cpp|Reading through a reinterpret_cast pointer into a byte buffer is unaligned / aliasing undefined behaviour on packet and DAT data. Use the load<T>() helpers (xi/bytes.h) or std::memcpy / std::bit_cast.": 2,
+  "semgrep.shell-command|src/ashita/lua_imgui.cpp|Runs a shell command line: anything from a path, a name or an addon spliced into it is a command injection. Prefer posix_spawn / execvp with an argument vector.": 1,
+  "semgrep.string-to-number-throws|apps/xi-client/effects_frame.cpp|std::stoi / stol / stoul / stof throw on text that is not a number or out of range; on server, DAT or addon text that ends the session. Use std::from_chars (or catch).": 2,
+  "semgrep.string-to-number-throws|apps/xi-client/main.cpp|std::stoi / stol / stoul / stof throw on text that is not a number or out of range; on server, DAT or addon text that ends the session. Use std::from_chars (or catch).": 28,
+  "semgrep.string-to-number-throws|apps/xi-client/script_steps.cpp|std::stoi / stol / stoul / stof throw on text that is not a number or out of range; on server, DAT or addon text that ends the session. Use std::from_chars (or catch).": 3,
+  "semgrep.string-to-number-throws|src/ashita/addon_info.cpp|std::stoi / stol / stoul / stof throw on text that is not a number or out of range; on server, DAT or addon text that ends the session. Use std::from_chars (or catch).": 1,
+  "semgrep.unchecked-number-parse|apps/xi-client/script_steps.cpp|atoi / atof report no errors and are undefined on overflow; std::from_chars says whether it parsed.": 2,
+  "semgrep.unchecked-number-parse|src/dat/macro_file.cpp|atoi / atof report no errors and are undefined on overflow; std::from_chars says whether it parsed.": 2,
+  "semgrep.unchecked-number-parse|src/dat/ui.cpp|atoi / atof report no errors and are undefined on overflow; std::from_chars says whether it parsed.": 1,
+  "semgrep.unchecked-number-parse|src/gfx/frame_trace.h|atoi / atof report no errors and are undefined on overflow; std::from_chars says whether it parsed.": 2,
+  "semgrep.unchecked-number-parse|src/gfx/window.cpp|atoi / atof report no errors and are undefined on overflow; std::from_chars says whether it parsed.": 1,
+  "semgrep.unchecked-number-parse|src/map/map_client.cpp|atoi / atof report no errors and are undefined on overflow; std::from_chars says whether it parsed.": 1
+ }
+}

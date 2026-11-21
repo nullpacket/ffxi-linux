@@ -1,0 +1,119 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "pt_common.glsl"
+
+// --pathtrace (goal 41): the traced light E denoised. Pass 0: temporal accumulation (reprojected by depth into the
+// previous frame, history kept while depth, normal and mode agree; up to 48 frames). Passes 1-3: an a-trous filter
+// (steps 1, 2, 4) over E, edge-stopped by view depth and normal. E is the light before the material, so textures stay
+// sharp whatever the filter does.
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 1) uniform sampler2D depthTex;
+layout(set = 0, binding = 2, rgba16f) uniform image2D rawE;
+layout(set = 0, binding = 4, rgba16f) uniform image2D aux;
+layout(set = 0, binding = 5, rgba16f) uniform image2D histE;     // this frame
+layout(set = 0, binding = 6, rgba16f) uniform image2D histEPrev; // the previous frame
+layout(set = 0, binding = 7, rgba16f) uniform image2D histAux;
+layout(set = 0, binding = 8, rgba16f) uniform image2D histAuxPrev;
+layout(set = 0, binding = 9, rgba16f) uniform image2D filtA;
+layout(set = 0, binding = 10, rgba16f) uniform image2D filtB;
+
+layout(push_constant) uniform Push
+{
+    PtParams p;
+    uint     pass;
+} pc;
+
+vec4 loadSrc(ivec2 q)
+{
+    return pc.pass == 1u ? imageLoad(histE, q) : pc.pass == 2u ? imageLoad(filtA, q) : imageLoad(filtB, q);
+}
+
+void storeDst(ivec2 q, vec4 v)
+{
+    if (pc.pass == 2u)
+    {
+        imageStore(filtB, q, v);
+    }
+    else
+    {
+        imageStore(filtA, q, v);
+    }
+}
+
+void main()
+{
+    ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 sz = ivec2(pc.p.size.xy);
+    if (any(greaterThanEqual(px, sz)))
+    {
+        return;
+    }
+    vec4 a = imageLoad(aux, px);
+    if (pc.pass == 0u)
+    {
+        vec4 raw = imageLoad(rawE, px);
+        imageStore(histAux, px, a);
+        float d = texelFetch(depthTex, px, 0).r;
+        if (a.x <= 0.0 || d <= 0.0 || (pc.p.opts.w & 1u) != 0u)
+        {
+            imageStore(histE, px, vec4(raw.rgb, 1.0));
+            return;
+        }
+        vec2  uv    = (vec2(px) + 0.5) * pc.p.size.zw;
+        vec3  w     = ptWorldAt(pc.p, uv, d);
+        vec4  clip  = pc.p.prevViewProj * vec4(w, 1.0);
+        vec2  puv   = clip.xy / clip.w * 0.5 + 0.5;
+        ivec2 q     = ivec2(puv * pc.p.size.xy);
+        bool  valid = clip.w > 0.0 && all(greaterThanEqual(q, ivec2(0))) && all(lessThan(q, sz));
+        vec4  h     = vec4(0.0);
+        if (valid)
+        {
+            vec4 ha = imageLoad(histAuxPrev, q);
+            h       = imageLoad(histEPrev, q);
+            valid   = ha.x > 0.0 && abs(ha.x - clip.w) < 0.03 * clip.w + 0.05 && dot(octDecode(ha.yz), octDecode(a.yz)) > 0.85 && abs(ha.w - a.w) < 0.5;
+        }
+        float n   = valid ? min(h.a + 1.0, 48.0) : 1.0;
+        vec3  out3 = valid ? mix(h.rgb, raw.rgb, 1.0 / n) : raw.rgb;
+        imageStore(histE, px, vec4(out3, n));
+        return;
+    }
+
+    const float k[5] = float[](1.0 / 16.0, 1.0 / 4.0, 3.0 / 8.0, 1.0 / 4.0, 1.0 / 16.0);
+    int   step = 1 << int(pc.pass - 1u);
+    vec4  c    = loadSrc(px);
+    if (a.x <= 0.0)
+    {
+        storeDst(px, c);
+        return;
+    }
+    vec3  n    = octDecode(a.yz);
+    // Fewer frames of history: blur more widely (the depth / normal stops keep it to the surface).
+    float young = clamp(1.0 - c.a / 16.0, 0.25, 1.0);
+    vec3  sum  = vec3(0.0);
+    float wsum = 0.0;
+    for (int j = -2; j <= 2; ++j)
+    {
+        for (int i = -2; i <= 2; ++i)
+        {
+            ivec2 q = px + ivec2(i, j) * step;
+            if (any(lessThan(q, ivec2(0))) || any(greaterThanEqual(q, sz)))
+            {
+                continue;
+            }
+            vec4  qa = imageLoad(aux, q);
+            if (qa.x <= 0.0 || abs(qa.w - a.w) > 0.5)
+            {
+                continue;
+            }
+            float wd = exp(-abs(qa.x - a.x) / (0.015 * a.x * float(step) + 0.05));
+            float wn = pow(max(dot(octDecode(qa.yz), n), 0.0), 16.0);
+            float wk = k[i + 2] * k[j + 2] * (i == 0 && j == 0 ? 1.0 : young);
+            float ww = wk * wd * wn;
+            sum += loadSrc(q).rgb * ww;
+            wsum += ww;
+        }
+    }
+    storeDst(px, vec4(wsum > 0.0 ? sum / wsum : c.rgb, c.a));
+}

@@ -1,0 +1,45 @@
+# clang-tidy for CI's analysis:clang-tidy job (tools/ci/analysis.py; docs/ci.md "Analysis"). A curated set: likely
+# bugs (bugprone-* includes the CERT C/C++ rules as aliases), performance, thread safety and the clang static analyzer.
+# Style-only checks and ones that only flag deliberate idioms here (signed bitwise in packet code, int-to-pointer in the
+# Ashita memory emulation, empty catches around optional features) are left out. Existing findings are baselined in
+# ci/analysis/baseline/clang-tidy.json.
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-branch-clone,
+  -bugprone-switch-missing-default-case,
+  -bugprone-exception-escape,
+  -bugprone-macro-parentheses,
+  -bugprone-unchecked-optional-access,
+  -bugprone-signed-bitwise,
+  -bugprone-throwing-static-initialization,
+  -bugprone-empty-catch,
+  -bugprone-assignment-in-if-condition,
+  -bugprone-assignment-in-selection-statement,
+  performance-*,
+  -performance-enum-size,
+  -performance-avoid-endl,
+  -performance-no-int-to-ptr,
+  concurrency-*,
+  -concurrency-mt-unsafe,
+  misc-misleading-bidirectional,
+  misc-misleading-identifier,
+  misc-redundant-expression,
+  misc-throw-by-value-catch-by-reference,
+  misc-unconventional-assign-operator,
+  misc-new-delete-overloads,
+  misc-uniqueptr-reset-release,
+  modernize-use-override,
+  modernize-use-nullptr,
+  clang-analyzer-*,
+  -clang-analyzer-optin.*,
+  -clang-analyzer-osx.*,
+  -clang-analyzer-webkit.*,
+  -clang-analyzer-fuchsia.*,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
+WarningsAsErrors: ''
+HeaderFilterRegex: '/(src|apps|tests)/'
+FormatStyle: none

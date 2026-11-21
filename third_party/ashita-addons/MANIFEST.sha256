@@ -1,0 +1,213 @@
+# sha256 of every bundled file (tools/vendor_ashita_addons.py). Ashita-v4beta 877d9e76b65b0361706f9e2be3423a713f63d3c5
+# left out: affinity: Windows-only: Win32 process CPU affinity
+# left out: ahcolors: does nothing: finds no stand-in for the game code it patches ("Failed to locate ... pointer")
+# left out: ahgo: does nothing: finds no stand-in for the game code it patches ("Failed to locate ... pointer")
+# left out: autologin: built into the client: --char / --autoconnect and the launcher's profiles
+# left out: cartographer: does nothing: finds no stand-in for the game code it patches ("Failed to locate ... pointer")
+# left out: casper: does nothing: sets entity render flags, which the client does not read
+# left out: chamcham: does nothing: writes model colours into actor memory the client does not have
+# left out: chatfix: harmful: shifts LSB's chat packets by a byte for an old server layout, cutting messages
+# left out: chatmon: does nothing: its feature is sounds, and addon sounds are not played
+# left out: chime: does nothing: fails to load (the game's chime sounds are not mapped)
+# left out: cleancs: does nothing: the font / primitive / ImGui managers' SetVisible is a no-op here
+# left out: dynamic_entity_renamer: built into the client: dynamic-entity renames (LSB's spawn-name layout and HorizonXI's 0x1FF list) are handled natively
+# left out: enternity: does nothing: edits log lines, but the dialogue box's wait comes from the event, not the log
+# left out: fastswap: does nothing: finds no stand-in for the game code it patches ("Failed to locate ... pointer")
+# left out: filterless: does nothing: finds no stand-in for the game code it patches ("Failed to locate ... pointer")
+# left out: filterscan: crashes the client: calls game functions it scanned for (docs/ashita-compat.md)
+# left out: freemem: Windows-only: SetProcessWorkingSetSize, a no-op here
+# left out: hideconsole: Windows-only: hides Ashita's bootloader console, which the client doesn't have
+# left out: hideobs: Windows-only: hides the window from OBS through SetWindowDisplayAffinity
+# left out: hideui: does nothing: the font / primitive / ImGui managers' SetVisible is a no-op here
+# left out: ime: Windows-only: the Windows IME
+# left out: instantah: does nothing: finds no stand-in for the game code it patches ("Failed to locate ... pointer")
+# left out: instantchat: does nothing: the client's chat log has no delay to remove
+# left out: macrofix: does nothing: the client's macro palette has no delay to remove
+# left out: mapdot: does nothing: finds no stand-in for the game code it patches ("Failed to locate ... pointer")
+# left out: minimapmon: does nothing: controls the Minimap plugin, which the client does not have
+# left out: mipmap: does nothing: finds no stand-in for the game code it patches ("Failed to locate ... pointer")
+# left out: move: does nothing: moves and resizes the window through Win32 calls
+# left out: nomad: does nothing: finds no stand-in for the game code it patches ("Failed to locate ... pointer")
+# left out: noname: does nothing: finds no stand-in for the game code it patches ("Failed to locate ... pointer")
+# left out: paranormal: does nothing: finds no stand-in for the game code it patches ("Failed to locate ... pointer")
+# left out: quicksets: does nothing: finds no stand-in for the game code it patches ("Failed to locate ... pointer")
+# left out: renamer: crashes the client: calls game functions it scanned for (docs/ashita-compat.md)
+# left out: skeletonkey: does nothing: writes an entity's status field, which the client does not read
+# left out: timestamp: built into the client: the native /timestamp and Config's chat timestamps
+# left out: trimspells: does nothing: finds no stand-in for the game code it patches ("Failed to locate ... pointer")
+# left out: truesight: does nothing: sets entity render flags, which the client does not read
+# left out: watchdog: crashes the client: calls game functions it scanned for (docs/ashita-compat.md)
+bc78c632c0ca09a5e5bd63bc05e67a679bc9f6a166a3b686d05d3d8c0a77021f  addons/actionparse/actionparse.lua
+fcbec0b008ec9842233c0323175256052e7ffeb58a4c4833834d88bd337d612f  addons/actionparse/parser.lua
+20be5eea8adc1ff796081913538cc55e630210cdd17dbfab021b71515698af2a  addons/actionparse/ui.lua
+fddbd3a6987ad2b568044fe951c4a60698301c9cb4db8ef954108091f855a68c  addons/activemon/active.png
+58b6d7e3302f9483326e592ebe6ed824c2153afbe2c7f624004bb01e31e92b20  addons/activemon/activemon.lua
+f654ac772fdfc279bee881271495fb54cf7812d38063e8c3478013b0f54f1b3e  addons/activemon/inactive.png
+f0f5cb57dd000ae51f50ddfa198f3385c7d62419064eb354a05cb51a8b13b1dc  addons/allmaps/allmaps.lua
+069b74550a340f277d2fdf9298aef4d9b6e5f0c81bd7b5bbe05e0293fc1dd01e  addons/aspect/aspect.lua
+e2bbfae2d15141c86590f71b933ea21430a086c0660303979ba747cfe33ace81  addons/autojoin/autojoin.lua
+c2f9f24c0c965021b0445c1df14853f5b403dce34c356cc1cf0c367c9ba333f1  addons/autorespond/autorespond.lua
+7386781cdab718878c521b4bf2c5d40985a7b12869a7f7b3386b3be76457b523  addons/blucheck/blucheck.lua
+81fd805d1618620e6e5c8c43918d5ae423cbd3fae963b4f6f2354fa17f13f29a  addons/blucheck/data/spells.json
+9a7600fcec0088319893269ec1e0edb89ed15085e1f07c7797cd73d3aa3e841a  addons/blucheck/ui.lua
+a6f96fab8aeeb835998f575c3d5510a845c9bf17d7fb49f712ddfa6a0633e6d4  addons/blumon/blumon.lua
+fe04ca7dafe7e7a36dc384d13ff9bd58f82e55169927879c8080d8817a1e4c69  addons/blusets/blu.lua
+859f50aa780ea9fc51ef9328ddb7fa632b8a1caaaf66c90a54eac914635e86d2  addons/blusets/blusets.lua
+82a4d9eda92b5075a8641addf8d6f82fabcf5c7a76cdeea14d319ac5ac42ec91  addons/cfhblock/cfhblock.lua
+afe4c525b0ca1fb2e8bcaf4f9e4991dcf4c7287a31cef00008c3c29fee76b63a  addons/changecall/changecall.lua
+93cffd3559ce7d274e68855657c3da1ba321db2003d9acf708adccfca6ad2765  addons/checker/checker.lua
+52af8b5bcdef9b56c2f588fed524a73d654a6a9a2543eca0ba0ae49004633267  addons/clearcolor/clearcolor.lua
+2dec82cbec906b248fe6a41b182808c2a0ca4a15967e6d66877e1bb96445564c  addons/clock/clock.lua
+4700662e7f76b40f239ac015297e50945d860e44eb3f37aea7604bf697904537  addons/config/README.md
+3f8e916c7acea53c347c49684b608829e3144de18218b604202954cbcf55b0b2  addons/config/config.lua
+5580d027c3a48a6c46b8c1f82588dddbbf80eb9e11a7ab9c045cc8bca0cdbca3  addons/craftmon/craftmon.lua
+4efbca2b207f06d9aa2358003d0adcf53efa22d03cb280bd144e118fa39f6816  addons/crosshair/crosshair.lua
+70537ee8dd03e4221ad0fab0078c5f0c0fa5db4e3c26ed3e05ae140f50a08088  addons/debuff/debuff.lua
+6dd3b8b2d80b3cc6f8e2dbea41e80cf71353f11236894373e31019d7fa05e4e9  addons/distance/distance.lua
+d18153d515924f3a37ee2564c98bf894d870395df7447113d227dd6079c21446  addons/drawdistance/drawdistance.lua
+d27189ae6815cb455f2c2027cdc7a256404489f0622a1b98fb97628706793498  addons/equipmon/assets/0.png
+2f059babe877088d5bc8259dd7516f2475a1af3279cc3e9d72b7768a3f2032b8  addons/equipmon/assets/1.png
+9b352139f02b36ef9eaef7c54a47a2e12221c94cf181f268ea8f27635d7b6a5a  addons/equipmon/assets/2.png
+9ab2a447c65a30dc416d29021f18e59e5bc34805fcc42768b61d904238908476  addons/equipmon/assets/encumber.png
+8ccc2a9dbd4d23440fa7b8a967da097888a37afb1359de91f8f1953a302a6fc5  addons/equipmon/equipmon.lua
+cbc37febe45e8ecec4f21c8dafee57a18f5b9a4baac75e22f84fc84d8ecca5dd  addons/filters/filters.lua
+666dc2280ad38d4da493cbe74ae6c9ebb38943ec5698f67f4fa78d4c292267d9  addons/fps/fps.lua
+9815b0c3cf2df7614066f5a872e584eb0de2ab9dcf09321495c7173d54a239c7  addons/gateway/gateway.lua
+02e10b9e4309f9f5870ba060437476912c90f7d55ee86cb752c589a9348501eb  addons/hideparty/hideparty.lua
+b85135d75077cc4f954b0d53f8b6baa27a659c0307645f10c5e1a92d32af4180  addons/imguistyle/imguistyle.lua
+8fb522c082aa17a6f7c73ac42047fa313a09c4bf1a67f0adf613f270fef69267  addons/invmon/invmon.lua
+48d8ccd77ad6edf2cad65fdcde4a2a4e17f42014aeaae8e4b99ce24cfbbec86a  addons/itemwatch/editor.lua
+6e158e6b50099b734f738e43b370c61e7ae9d0f376ed9012bb0a70c26329c4c6  addons/itemwatch/itemwatch.lua
+b091e26289c6e43427bc7b043c18baf14d13c68276105c7ca74d4013f83bd058  addons/itemwatch/listmanager.lua
+6660029a0e1eb9980ac288ac2a4d8524f10ab46544c22ac98c642de8ea5975ec  addons/libs/annotations/Direct3D/IDirect3D8.lua
+c5985f489f3d9d06750994f1192646888f784bf30068e7858699bdf3cb031123  addons/libs/annotations/Direct3D/IDirect3DBaseTexture8.lua
+0061c581e93b72a06eee98f098da4e7773809cdce242b312e04f9e3de4e29eb3  addons/libs/annotations/Direct3D/IDirect3DCubeTexture8.lua
+cf367066809b270a82d0e9d5b1f262c513eb6ab7516db2eab8c6bf696998473a  addons/libs/annotations/Direct3D/IDirect3DDevice8.lua
+1eddffd70f81cae0038f976587f3f8295420c84782a7e29995629c987374ee37  addons/libs/annotations/Direct3D/IDirect3DIndexBuffer8.lua
+b4581d042b50e5007c2446af20768f737325cfe0909e54d730e5bcc5dadbafcb  addons/libs/annotations/Direct3D/IDirect3DResource8.lua
+43db6c425e246519021b777b45d2b34eaf61eb1ccc879eed813f2ed2bf226973  addons/libs/annotations/Direct3D/IDirect3DSurface8.lua
+bc9a5278a8ab921dcb8ad46c840922b6e82af8515bf469d6b013363228f25b2d  addons/libs/annotations/Direct3D/IDirect3DSwapChain8.lua
+55b191a501b589186e55d157c00ba2b34393e1426c25b12bb0cf7781b2747efb  addons/libs/annotations/Direct3D/IDirect3DTexture8.lua
+7fa2882218903cc18e48b31f737cf98e6f3aef7c61cf0d3d95e2023d22267c9f  addons/libs/annotations/Direct3D/IDirect3DVertexBuffer8.lua
+ccd87b4db382373998c96e3c13ffa32c86fad0d56235f7a6632e9222714d1771  addons/libs/annotations/Direct3D/IDirect3DVolume8.lua
+54098b1cb302651a728cbf9a396f4a8004fa7e080838321baac26bb702b7625c  addons/libs/annotations/Direct3D/IDirect3DVolumeTexture8.lua
+be4d2f2aeee6ece30f3e1334bd6c3bf213e77de5b1cb6be21e95bc18cd1744af  addons/libs/annotations/Direct3D/IUnknown.lua
+9bcea36b1ae4c2ad0614bdb9d8efff6d77c5b93cdab5e9e365fc536cf444003f  addons/libs/annotations/SDK/AddonManager.lua
+05c452601fcf59f8671f229b5628e46fb91873ef1f93573662d079794d6bae94  addons/libs/annotations/SDK/IAshitaCore.lua
+6b93108442324d78a2c396421a8c1d7ea33c009439993c192af2b18ca5c18302  addons/libs/annotations/SDK/IChatManager.lua
+d027de549a64ac81a14d62336fd730709b360692fe4b48b88467cb680d11eeac  addons/libs/annotations/SDK/IConfigurationManager.lua
+a2d0a9a0cabe4bd90a2b67fa448ee551d7873b7ce4f2aa0d3b5f694864deb03e  addons/libs/annotations/SDK/IFontManager.lua
+efc3d8b0960fd47aee26d330659f475e8eff09090fe9b9a5e1399a3181571fe6  addons/libs/annotations/SDK/IGuiManager.lua
+86fb89740c3af5eb23dd0a1ddb2c33c9bac1f23f2f4d740a3c88119ed1877500  addons/libs/annotations/SDK/IGuiManagerTypes.lua
+c6101d9bc7952636e0871e2b5e4232801a1ae674ec541471021ece0183e39d79  addons/libs/annotations/SDK/IInputManager.lua
+0787f3480b88a4880d4ffe619a69b4b89c85b76d727226109412eb18830b6d9a  addons/libs/annotations/SDK/ILogManager.lua
+08fcaa0aa457c9292361d97447be498c66c08c77dddcd2a46ae1701ec267c499  addons/libs/annotations/SDK/IMemoryManager.lua
+4ce3926dc95e240c44c5df6eb56d88dfad5260ff338fd983b62f2cb338a7d638  addons/libs/annotations/SDK/IOffsetManager.lua
+65c84d826881a026971023315a34276e21ff78eb29a73a8628051983c6ed0b6f  addons/libs/annotations/SDK/IPacketManager.lua
+c37b07ccbcc009415c0d16707b798ed3be7ea90935d98caa600b4340926982c8  addons/libs/annotations/SDK/IPluginManager.lua
+e90def8226278ae50c984d7c2bcf24bcef6e8c4d02b8d432911aa86a138288a2  addons/libs/annotations/SDK/IPointerManager.lua
+f4158e802e5e06c5c92c78233391ccef46a036cac213dac10139b767539a0959  addons/libs/annotations/SDK/IPolPluginManager.lua
+c2197abbaca736d3c370495b9d29d48b71de3e8b4a089056657250f9d30604b7  addons/libs/annotations/SDK/IPrimitiveManager.lua
+cfb3b427044d0cf6abbfdfcda925283bbe50061a6384f9f8c486043f7a847175  addons/libs/annotations/SDK/IProperties.Lua
+bb08bce03dbd319bf107791f3a5cf8025440ceb66e3d7ac902cd8c78993bfb97  addons/libs/annotations/SDK/IResourceManager.lua
+0c299879eaff01bd96046f61d38ab9e9bb22bbf66807b505f0558b61fc26f362  addons/libs/annotations/SDK/Memory/IAutoFollow.lua
+c5e45112976c50246092cc831428cdffa8b4448f3f34a4b15149356866556422  addons/libs/annotations/SDK/Memory/ICastBar.lua
+920a577a437c10f6d2a6844f5132b4d6fc0d4f4b75d48a79b9dd05947f11b943  addons/libs/annotations/SDK/Memory/IEntity.lua
+b7b69b3086a57d6e0866200e00ea17a6287a3a838abb47aee29da9a26851b1e7  addons/libs/annotations/SDK/Memory/IInventory.lua
+a44e1b279c9f2ad508c8b98d93c5d87ce584b1f1fa1f3ac1241122815f3a4670  addons/libs/annotations/SDK/Memory/IParty.lua
+d165ed6fc58c9610daa12de4d694c8f3f2852a1d580a1f109e8617fe284292b8  addons/libs/annotations/SDK/Memory/IPlayer.lua
+f4c76d9f269f12e6c0630dcc4bda454bbc8fadd02f495e7a83860d94ae4af08c  addons/libs/annotations/SDK/Memory/IRecast.lua
+1c4a1256b91ab56412824cc17ba473d2f4920db60c23d232c4370d20113107a1  addons/libs/annotations/SDK/Memory/ITarget.lua
+6a7b7665f17d1ef8c965ad365b061024f13336c5df8d4170f57ce51c3b45635a  addons/libs/annotations/addon.lua
+f98e157ca57554652f1e673b6a81065c176fa2c6bd1a4e415b5af18912f7cb80  addons/libs/annotations/ashita/ashita.lua
+639fd1429a5a54d18e3230089253e99d8d6048692dc4836cea7cf92646590119  addons/libs/annotations/ashita/bits.lua
+2d74c8fa15f2759b87b52599d0faf23b5749002186dd9a981420acb6e3c78f37  addons/libs/annotations/ashita/events.lua
+2134e88ed4fdf8a9c1938d4e78d6054e79ed6d039c935e49748e6355df54c8c9  addons/libs/annotations/ashita/fs.lua
+16057abb593388e958020989e5b2cb5fc0cde7f3eab634d6af49221615307ff3  addons/libs/annotations/ashita/memory.lua
+7be2174dabd715a44651afbf0f3073f725e1789c82b3db8409a9bf01915891b7  addons/libs/annotations/ashita/misc.lua
+cdea9b45b419a404c90f9fb37b876ca86b904ae1a9c1c5e3d29b1c6bd096ad08  addons/libs/annotations/ashita/regex.lua
+149a9f64502b24f8feca6be4cf76133aaab1d5a4ddd6e3bc267cb98443176c8e  addons/libs/annotations/ashita/tasks.lua
+af8b1f741fb99bd410ced70aa303170172d95f168b2fa8ad75f88ebc7dfed80c  addons/libs/annotations/ashita/time.lua
+3a4d11885c32910f11034595348a32840a4ab07b4643db7ae2c09140778b37a2  addons/libs/annotations/common.lua
+bd91bd1fab105c7cda49ce31943806015d829edfd39741c973cf602fd3d62f48  addons/libs/annotations/constants.lua
+35d55b5a62854d8705609139b088a7304f11107b77807dc40507291b96428ea1  addons/libs/annotations/extensions.lua
+3638867f91a530c12dfed02f561d0c8ad6b7faa3713dfad407d75b1030403412  addons/libs/annotations/libs_fonts.lua
+e86e8c8683d1a2a25b9e8226a56372318aa9d21acf4475b75508cdad822b3f15  addons/libs/bitreader.lua
+924eaf6f8febe6d921bfe8a42be229b73bf17f65badedca578adbafc98a4f745  addons/libs/chat.lua
+5077480cf5a34ef62db78e5057bfa5dacaf82efb38f4c1daa09b99e2ab73a6bc  addons/libs/common.lua
+1ef9464e7c0f0dad1c870a95e489dbd04ceea0419e3531c6c46e281f25d1376a  addons/libs/d3d8.lua
+82250c560305b1a7c6bb4294b2e0f4057961efa39c2a81f4f3d1ba068721a551  addons/libs/d3d8/d3d8.lua
+7df31e613d17f63f68ac10f3a3a509b82b435e969304957b06d7cb68d27ccc7c  addons/libs/d3d8/d3d8caps.lua
+61e7d0a8ff28b377bc868324a0c8864d8ec5f677379eddda8689178b85ac74dd  addons/libs/d3d8/d3d8types.lua
+6b64cb782cc2d444d2592a1f85b73442b4df6dba0add6b624aa21b0d6d659a12  addons/libs/d3d8/d3dx8.lua
+c2cf3ab5139ce76a2df182e94a93eac0e8cad3cad2e64c213edfa3edf5ae2db7  addons/libs/d3d8/interfaces/idirect3d8.lua
+f2b23d788eb50d85e3da2f0beff2280b5edb389e0a5ff74d02509c67ee04b19e  addons/libs/d3d8/interfaces/idirect3dbasetexture8.lua
+4659a0ad1059889dfb163f4ceb8945ca90a794ffe1988d81981a803f6167ee2c  addons/libs/d3d8/interfaces/idirect3dcubetexture8.lua
+c5278211b7b1575a4b6237d40a3c640810e3c0810364edbea6e1def3725cf310  addons/libs/d3d8/interfaces/idirect3ddevice8.lua
+65a202b5c245ea8ab31bad694b5a8c124a03b25eb7b60268753b9a3e9e48ee44  addons/libs/d3d8/interfaces/idirect3dindexbuffer8.lua
+337117777032ab907ff9d101101b3ef93e62a62417228ed15dfd6b506d64be61  addons/libs/d3d8/interfaces/idirect3dresource8.lua
+2a97f6e3428e5b614d51e5251c116c207586e628ae9970b6625db8afc66f52fa  addons/libs/d3d8/interfaces/idirect3dsurface8.lua
+bb1104a204b5bdbafbc0d5106156359cfc9e062c760f9e006fc6dd9b34b14e1b  addons/libs/d3d8/interfaces/idirect3dswapchain8.lua
+a7d1b29d981452befc99ae4b874620b59823211c7b3c00b424ef3fe686ce999d  addons/libs/d3d8/interfaces/idirect3dtexture8.lua
+6d83d1ce64256d32f65197f84852f817710e27f8263432e66b4377a55d697273  addons/libs/d3d8/interfaces/idirect3dvertexbuffer8.lua
+3eeeeb64693c84cd7ce9d76121c944fa90208db6dd9eae8166e4e3476a40ffa2  addons/libs/d3d8/interfaces/idirect3dvolume8.lua
+67beabab11075e1ac3e6240f6533e2f977134901d812649c6b5bfa206cc264fa  addons/libs/d3d8/interfaces/idirect3dvolumetexture8.lua
+872f777e30f15b3aed7bc228821b63bd262316d9c7ab5184fa0aaac31631fd62  addons/libs/d3d8/interfaces/iunknown.lua
+f0ea038cee5d5c3eb271e51fd67403c7c90fd6d52968c37515889c40f56ddde1  addons/libs/ffxi/account.lua
+04534c54cd80338d2e3b6863365efb25d1eb8dcc80510222494eb594f1ba6653  addons/libs/ffxi/dats.lua
+bb80f2fb3e238b7654f4f2873d03f449644bf9024da3211e4334830207c302ec  addons/libs/ffxi/dats/npcs.lua
+9127cbde2f0235c7e1c165fbb6e8fddc604436f6b86a83c4448cc53880197001  addons/libs/ffxi/itemdata.lua
+003e10eb716cc0719b12c30376cd8a40c6683722c0a5879575ac083496661c6c  addons/libs/ffxi/macros.lua
+f963c60a9232ef72d15f98a0a7a3a4a5dcf8a73e2720f3948a162d5127135d61  addons/libs/ffxi/targets.lua
+6c7078678fb35f1394f4735b9dea552cbc16356aa13d4b064761005f42eac4ac  addons/libs/ffxi/time.lua
+beae1162e47d4377a671fae0f2c056fb581f4e0fe48f1ca7c8574e52974a8620  addons/libs/fonts.lua
+af57d4a4d1d701b2ea96c26c0ffbfa32782a8a7833ed25bef91db3fa8eed46f0  addons/libs/imgui.lua
+394ee22ab856343b360d796ee26233fb1a28aed0c3e53269631e56d78e414c8e  addons/libs/inheritance.lua
+fe55d3d0ff042aa84311cb02c9b8956b1fcb3e9baf22e57ddc00fd220070f5b8  addons/libs/json.lua
+3c948609fa49d00c5470fb098d73fcc79f7f0762a8e82e30bb3bfb733fa438ef  addons/libs/memory/cave.lua
+1e3214c205840418b23aeefe99948b8dca192ab0c6f01141d610c32e2e171d1e  addons/libs/memory/patch.lua
+7ce6c89aac86c695fbf110cc46d222c25b2eecb457b649a578dbeb188893f8d3  addons/libs/mime.lua
+86f973348c914c029063d8d4f650ab1b323590194a5a542c6bfd2389ede9f702  addons/libs/primitives.lua
+67c4868b9f682952bb6eae369f5c437fd6cb0b4239ff031baf6523f16db091b1  addons/libs/reflect.lua
+e0f41d4124136ec14ff42b013a18b9fc0ba1d76db6ca756316dd7e0c404d8340  addons/libs/reflex.lua
+9352ee8f3998473ceb46b2914fd2ee2bac35f02f365a61ec6d4f063b726c7706  addons/libs/scaling.lua
+d3ebb5fb4ba8fb5412d48e1f17dcceec004708477948875fad3b5e16e936fb57  addons/libs/settings.lua
+d8be9b276dbee85a9c0f3a6529035576a66e1c84996244e29a4e5466bbfaae08  addons/libs/socket.lua
+a78d9100a46a286f491634e0418430dd26f194e61d54e1f61cc0ba34fe2c1cf6  addons/libs/socket/ftp.lua
+aecff8c2d99d77a6473269367d5b085ad0db189d9699c2f47dcb97ae5ad348df  addons/libs/socket/headers.lua
+9b0fd3716572a03d8960d1a2fc1628e90d9472e3b65e0288bc3dd199ec7ba1ea  addons/libs/socket/http.lua
+f8ebb246919c73c9fe1c12a0a8fb0f1124835a0bd56a55df02163f96d664f795  addons/libs/socket/ltn12.lua
+c66e22f1cbc1bdb705b32dd51db9daba315058f362cae5a8f1638d184cfddae1  addons/libs/socket/mbox.lua
+92644857b42ceb5c8fab68fb508f3eb65dd110f67d97d38529348635616c7f53  addons/libs/socket/smtp.lua
+6eeae5866ab3f81dafaf1bc52f37a8a3e07c0dde78340418cff7716d9058e83d  addons/libs/socket/ssl.lua
+ef65b76b45c837f83187cee2d0511decde8a873e90b1ed2868f2b8af984ae2a3  addons/libs/socket/ssl/https.lua
+ef33b6da1728cfe1ad6649c532eb3178754ccac7fa2cf9fda72cdc620f7ff7a6  addons/libs/socket/tp.lua
+50c742a3e7b9989e3b2502e81845e4818360ae3d648895a8875cc14008436ab7  addons/libs/socket/url.lua
+cae9311a158ee7984c28dc8d9dd14ebddc3f725c39ee170817b192ea88fde22f  addons/libs/sugar.lua
+ca75b78a6b81330218b17603a880c8bdd0efb15c80c98acc3b82641e3e25bdf5  addons/libs/sugar/boolean.lua
+45f0d54cce51b367316ff55b3cd6e82231e617ad261935dd9c42d4f260ac599d  addons/libs/sugar/coroutine.lua
+5d5e7c6d799f4a4920148e68abd0b5db0dc1e123f56d38d0d4be46664a76dcba  addons/libs/sugar/function.lua
+1a33e766ff945359000393d548f42f08bcc6a21f3d6351c58c64741ecd5780ce  addons/libs/sugar/math.lua
+be6b4ec7c018594e5a906be5657521689b386c29777bb45b57a1501ff54df15a  addons/libs/sugar/nil.lua
+9a65568c8d69e342beb71f2731412d09763f51074098cca0f33daff3e492ae40  addons/libs/sugar/string.lua
+ad558fe0ed4a60d84e7781ec082b9fa3dc093206e5708bbfcc8e9db0702475d1  addons/libs/sugar/table.lua
+e44e85b78b2772d780e901f61eaf539ab9287ff0c7feb8ac7c44d92dc7d3b70d  addons/libs/switch.lua
+44ffe0108eaedbf520d6a413d173031af47aac8797a2e7ec619818c4ea6b82d7  addons/libs/win32types.lua
+de767836a85c1c7de832e5b3e719fc7bdffd754fa6d31fde99433411235a5152  addons/links/links.lua
+1549909869e859bd5cd21a0474a8e56a5f2a6e52861f6fbc3fda463a1a88f71b  addons/logincmd/logincmd.lua
+b02b25f9558b8921adc1e1511afabce6abe3afc68012cd41919c80caa5981eca  addons/logincmd/profiles/Atomos.lua
+65f6ced3b48fb64e860f9a48febb534f6d6e21dce33b4a3e1bdfb8dba2a838a4  addons/logs/logs.lua
+9384b2d913ffa9de32a4e785ee18930bc394db3f96fde6e5a0eb090ef2a06711  addons/namecolors/namecolors.lua
+0424f30c4905703485dc9811e554bef231cd196e390659acce9cff6f52c2f6ca  addons/nokb/nokb.lua
+894010af7b55419ea539531aefbbca87c52b38581e1d0120d4fd068ded40c5be  addons/onevent/onevent.lua
+26a74ed4540e4d23f336b32562b82c4cc4e61b5469107d63da5d233aedabb2cf  addons/peekaboo/peekaboo.lua
+18f2a8b8f9075c2f543900572b4ee15af65fb7bd639f16e540a0ec54069084c6  addons/petinfo/petinfo.lua
+185e75ee5afa5df1b3a599b06febf7272f0b80a1feac98a92ee0a0ebdb33d6df  addons/recast/recast.lua
+e2fc3f0cfe86040a16acbb2c8b54199bdeb5a43343f798abdde9ced417523d9d  addons/repeater/repeater.lua
+c631cd78f4123d178870f0903d509c7884ad037c71fcafd4eb3d28b19a146ead  addons/sexchange/sexchange.lua
+efa2d72f71ff9cd58a884947b022ab6f8b95a0ba8ec45949453e326150ce9d2f  addons/singlerace/singlerace.lua
+55d6860c4e851dd7d333ff6643864d49cd371b536a76f8f74425f2545982dc8c  addons/stepdialog/stepdialog.lua
+c03e32a811ade2a0e212024c4f6382ee161d7cb6d23940b9f5dd83289b68748b  addons/stfu/stfu.lua
+3b1c90fe0d98bf2b09b4795176434aef089c2d61bb5de0eea2ab2e73083a715f  addons/tokens/replacements.lua
+9325f8c8f81466d7903efb41833f0f943a2205574cf47f5deff9060076abe2c1  addons/tokens/tokens.lua
+7d12105f0fa742129ff73cdb788b7e1996fa10e0d6df0a205a6e9aa181bf9090  addons/tparty/tparty.lua

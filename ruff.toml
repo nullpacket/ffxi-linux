@@ -1,0 +1,16 @@
+# ruff for CI's check:lint job (tools/ci/analysis.py lint; docs/ci.md "Analysis"): pyflakes, the error-prone
+# pycodestyle rules, bugbear and the bandit security rules, minus the ones that only flag how local tools are written.
+target-version = "py312"
+line-length = 120
+
+[lint]
+select = ["E4", "E7", "E9", "F", "B", "S"]
+ignore = [
+    "S603",  # subprocess with an argument list (not a shell): the tools run git, glab, the client
+    "S607",  # a program found on PATH (git, glslc, ...)
+    "S311",  # random for wallpapers / test data, not cryptography
+    "S101",  # assert in tools
+    "E401",  # several imports on one line (style)
+    "E741",  # variable named l (style)
+    "B905",  # zip() without strict= (style)
+]

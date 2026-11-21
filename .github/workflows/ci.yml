@@ -1,0 +1,124 @@
+# ffxi-linux CI on GitHub Actions (docs/ci.md describes the stages it runs).
+#
+# Order: check (secrets, forbidden files, lint, format) -> analysis (clang-tidy, cppcheck, SAST) -> build (default and
+# AddressSanitizer builds with their tests) -> docs. A stage starts only when every job before it passed, so a commit
+# with a leaked secret, a forbidden file or a new finding is never built (format only warns).
+#
+# Jobs run in an Arch Linux container with the packages of ci/Dockerfile (.github/install-deps.sh), so the analysis
+# tools match the committed baselines (ci/analysis/baseline/). GitHub's runners have no game data and no GPU: the tests
+# that need the game's files or a Vulkan driver skip, and the rest must pass.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # tools/ci/analysis.py compares format and secrets with this commit: the pull request's base, or the push's previous
+  # tip (all zeros on a new branch; analysis.py then uses the commit's parent).
+  XI_CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+  SEMGREP_ENABLE_VERSION_CHECK: "0"
+  SEMGREP_SEND_METRICS: "off"
+
+jobs:
+  check:
+    name: check (${{ matrix.tool }})
+    runs-on: ubuntu-24.04
+    container: archlinux:base@sha256:52dfbd5afb23a220d5ee92dafcb4c788d96c026ed04179890c23adef4c897fa0
+    strategy:
+      fail-fast: false
+      matrix:
+        tool: [secrets, lint, format]
+    # Advisory: clang-format re-aligns neighbouring lines when it formats only the changed ones.
+    continue-on-error: ${{ matrix.tool == 'format' }}
+    steps:
+      - name: Install git
+        run: pacman -Syu --noconfirm --needed git
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Install tools
+        run: bash .github/install-deps.sh
+      - name: Mark the checkout safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: ${{ matrix.tool }}
+        run: python3 tools/ci/analysis.py ${{ matrix.tool }} --github
+
+  analysis:
+    name: analysis (${{ matrix.tool }})
+    needs: check
+    runs-on: ubuntu-24.04
+    container: archlinux:base@sha256:52dfbd5afb23a220d5ee92dafcb4c788d96c026ed04179890c23adef4c897fa0
+    strategy:
+      fail-fast: false
+      matrix:
+        tool: [sast, clang-tidy, cppcheck]
+    steps:
+      - name: Install git
+        run: pacman -Syu --noconfirm --needed git
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Install tools
+        run: bash .github/install-deps.sh ${{ matrix.tool == 'sast' && '--semgrep' || '' }}
+      - name: Mark the checkout safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      # clang-tidy and cppcheck read a configure's compile database; LuaJIT's generated headers come from its own
+      # build.
+      - name: Configure
+        if: matrix.tool != 'sast'
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DXI_WERROR=ON
+          tools/build.sh build --target xi_luajit_build
+      - name: ${{ matrix.tool }}
+        run: tools/build.sh --run python3 tools/ci/analysis.py ${{ matrix.tool }} --build-dir build --github
+
+  build:
+    name: build (${{ matrix.config }})
+    needs: analysis
+    runs-on: ubuntu-24.04
+    container: archlinux:base@sha256:52dfbd5afb23a220d5ee92dafcb4c788d96c026ed04179890c23adef4c897fa0
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - config: default
+            cmake: -DXI_WERROR=ON
+          # AddressSanitizer + UBSan: memory errors and undefined behaviour fail the test that triggers them. gcc's
+          # instrumentation adds false warnings inside libstdc++, so warnings are the default build's job.
+          - config: asan
+            cmake: -DXI_SANITIZE=ON -DXI_WERROR=OFF
+    env:
+      ASAN_OPTIONS: detect_leaks=0:abort_on_error=1:strict_string_checks=1:detect_stack_use_after_return=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+    steps:
+      - name: Install git
+        run: pacman -Syu --noconfirm --needed git
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install tools
+        run: bash .github/install-deps.sh
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo ${{ matrix.cmake }}
+      - name: Build
+        run: tools/build.sh build
+      - name: Test (no game data, no GPU)
+        run: tools/build.sh --ctest build --output-on-failure
+
+  docs:
+    needs: build
+    runs-on: ubuntu-24.04
+    container: archlinux:base@sha256:52dfbd5afb23a220d5ee92dafcb4c788d96c026ed04179890c23adef4c897fa0
+    steps:
+      - name: Install git and Python
+        run: pacman -Syu --noconfirm --needed git python
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build the docs
+        run: python3 tools/build_docs.py --check-links

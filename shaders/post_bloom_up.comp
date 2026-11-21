@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#version 460
+// --post=bloom: one level back up, the smaller level tent-filtered and added in.
+#extension GL_GOOGLE_include_directive : require
+#include "post_common.glsl"
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(set = 0, binding = 0, rgba16f) uniform image2D dst;
+layout(set = 0, binding = 1) uniform sampler2D src; // the level below (half this size)
+
+void main()
+{
+    ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(px, ivec2(pc.size.xy))))
+    {
+        return;
+    }
+    vec2 uv = (vec2(px) + 0.5) * pc.size.zw;
+    vec2 o  = pc.size.zw;
+    vec3 s  = textureLod(src, uv, 0.0).rgb * 4.0;
+    s += (textureLod(src, uv + vec2(o.x, 0.0), 0.0).rgb + textureLod(src, uv - vec2(o.x, 0.0), 0.0).rgb + textureLod(src, uv + vec2(0.0, o.y), 0.0).rgb +
+          textureLod(src, uv - vec2(0.0, o.y), 0.0).rgb) *
+         2.0;
+    s += textureLod(src, uv + o, 0.0).rgb + textureLod(src, uv - o, 0.0).rgb + textureLod(src, uv + vec2(o.x, -o.y), 0.0).rgb +
+         textureLod(src, uv + vec2(-o.x, o.y), 0.0).rgb;
+    vec4 d = imageLoad(dst, px);
+    imageStore(dst, px, vec4(d.rgb + s / 16.0, 1.0));
+}

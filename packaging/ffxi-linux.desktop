@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ffxi-linux
+GenericName=Game client
+Comment=Native Linux client for FINAL FANTASY XI on a LandSandBoat server
+Exec=ffxi-linux
+Icon=applications-games
+Terminal=false
+Categories=Game;RolePlaying;

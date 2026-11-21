@@ -1,0 +1,35 @@
+; ffxi-linux display settings. Copy to ~/.config/ffxi-linux/client.ini, or pass --config FILE.
+; These are FFXI's own registry keys, as in an Ashita boot file's [ffxi.registry] section, so that
+; section can be copied over as-is (or the Ashita file passed with --config). -1 = default.
+; Command-line overrides: --res WxH, --bg-res WxH, --menu-res WxH, --window-mode N.
+
+[ffxi.registry]
+; Window size.
+0001 = 1600
+0002 = 900
+; Background resolution: the 3D scene renders at this size and is scaled to the window.
+; Larger than the window = supersampling (sharper, slower); -1 = the window size.
+0003 = -1
+0004 = -1
+; Window mode: 0 fullscreen, 1 windowed, 2 fullscreen windowed (borderless), 3 borderless window.
+0034 = 1
+; Menu resolution: the interface is laid out at this size and scaled to the window.
+; Equal to the window size = menus at their original pixel size; smaller = bigger menus.
+; -1 = two thirds of the window (menus at 1.5x).
+0037 = -1
+0038 = -1
+
+[ffxi-linux]
+; Window type 1..8: the frame and background style of every window (a Config option in the game).
+window_skin = 1
+; Keyboard layout (the game's Config "keyboard" option): 0 = Normal (numeric keypad), 1 = Compact (no keypad:
+; WASD to move, IJKL camera/cursor, Y/N confirm/cancel). See docs/input-format.md.
+keyboard = 0
+
+; Ashita v4 addons (docs/ashita-compat.md): a folder laid out like an Ashita install (addons/ with Ashita's libs, config/).
+; ashita_version: auto (default), latest or horizonxi. ashita_load: addons to load at start, comma-separated.
+; ashita_script: a boot script whose /addon load lines run (e.g. the folder's scripts/default.txt).
+;ashita_dir = /home/you/ashita
+;ashita_version = auto
+;ashita_load = distance, fps
+;ashita_script = /home/you/ashita/scripts/default.txt

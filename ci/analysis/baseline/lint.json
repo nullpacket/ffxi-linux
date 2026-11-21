@@ -1,0 +1,28 @@
+{
+ "tool": "lint",
+ "total": 39,
+ "findings": {
+  "ruff.B007|tools/char_to_obj.py|Loop control variable `name` not used within loop body": 1,
+  "ruff.B007|tools/zone_collision.py|Loop control variable `h` not used within loop body": 1,
+  "ruff.B007|tools/zone_collision.py|Loop control variable `lo` not used within loop body": 1,
+  "ruff.B007|tools/zone_wallpapers.py|Loop control variable `s` not used within loop body": 2,
+  "ruff.B007|tools/zone_weather.py|Loop control variable `pl` not used within loop body": 1,
+  "ruff.B023|tools/pacing/analyze.py|Function definition does not bind loop variable `gaps`": 4,
+  "ruff.E702|tools/pacing/analyze.py|Multiple statements on one line (semicolon)": 1,
+  "ruff.E702|tools/pacing/stress.py|Multiple statements on one line (semicolon)": 1,
+  "ruff.E731|tools/pacing/analyze.py|Do not assign a `lambda` expression, use a `def`": 1,
+  "ruff.F401|tools/pacing/analyze.py|`statistics` imported but unused": 1,
+  "ruff.F541|tools/npc_ground_check.py|f-string without any placeholders": 2,
+  "ruff.S105|tools/perf/crowd.py|Possible hardcoded password assigned to: \"PASSWORD\"": 1,
+  "ruff.S108|tools/pacing/stress.py|Probable insecure usage of temporary file or directory: \"/tmp/xi-stress\"": 1,
+  "ruff.S108|tools/perf/crowdrun.py|Probable insecure usage of temporary file or directory: \"/tmp/ffxi-perf\"": 1,
+  "ruff.S108|tools/perf/measure.py|Probable insecure usage of temporary file or directory: \"/tmp/ffxi-perf\"": 1,
+  "ruff.S108|tools/perf/report.py|Probable insecure usage of temporary file or directory: \"/tmp/ffxi-perf\"": 1,
+  "ruff.S108|tools/perf/spikes.py|Probable insecure usage of temporary file or directory: \"/tmp/ffxi-perf\"": 1,
+  "ruff.S608|tools/pacing/stress.py|Possible SQL injection vector through string-based query construction": 1,
+  "ruff.S608|tools/perf/crowd.py|Possible SQL injection vector through string-based query construction": 12,
+  "ruff.S608|tools/perf/crowdrun.py|Possible SQL injection vector through string-based query construction": 1,
+  "ruff.S608|tools/perf/measure.py|Possible SQL injection vector through string-based query construction": 2,
+  "shellcheck.SC1090|scripts/xi-client.sh|ShellCheck can't follow non-constant source. Use a directive to specify location.": 1
+ }
+}

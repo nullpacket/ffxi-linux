@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#version 460
+// --post: bloom added to the HDR scene, then the tone map back to the game's 8-bit values.
+#extension GL_GOOGLE_include_directive : require
+#include "post_common.glsl"
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(set = 0, binding = 0, rgba16f) uniform image2D work;
+layout(set = 0, binding = 1) uniform sampler2D bloomTex;
+
+void main()
+{
+    ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(px, ivec2(pc.size.xy))))
+    {
+        return;
+    }
+    vec4 c = imageLoad(work, px);
+    vec3 h = c.rgb;
+    if ((flags() & POST_BLOOM) != 0u)
+    {
+        h += textureLod(bloomTex, (vec2(px) + 0.5) * pc.size.zw, 0.0).rgb * pc.lightColor.w;
+    }
+    imageStore(work, px, vec4(toGamma(aces(h)), c.a));
+}

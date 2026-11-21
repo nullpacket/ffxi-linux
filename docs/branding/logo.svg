@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="360" viewBox="0 0 1400 360">
+  <defs>
+    <linearGradient id="fA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f2fcff"/><stop offset="1" stop-color="#8fdcff"/></linearGradient>
+    <linearGradient id="fB" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9be2ff"/><stop offset="1" stop-color="#2c74d0"/></linearGradient>
+    <linearGradient id="fC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c6f3ff"/><stop offset="1" stop-color="#3a8fe4"/></linearGradient>
+    <linearGradient id="fD" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4a96e6"/><stop offset="1" stop-color="#143a8a"/></linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6dc"/><stop offset="0.55" stop-color="#ead9a6"/><stop offset="1" stop-color="#c9a95e"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#9fe8ff" stop-opacity="0.45"/><stop offset="1" stop-color="#9fe8ff" stop-opacity="0"/></radialGradient>
+  </defs>
+
+  <!-- mark: crystal + elemental orbit, centered on (180,180) -->
+  <g id="mark">
+    <circle cx="180" cy="180" r="170" fill="url(#glow)"/>
+    <!-- back half of the orbit (behind the crystal) -->
+    <path d="M 40 205 A 140 46 -18 0 1 320 155" fill="none" stroke="url(#gold)" stroke-width="4" stroke-opacity="0.55"/>
+    <g stroke="#0b1330" stroke-width="2">
+      <circle cx="292" cy="128" r="7" fill="#3a7bff" opacity="0.8"/>
+      <circle cx="200" cy="124" r="7" fill="#fff6c8" opacity="0.8"/>
+      <circle cx="70"  cy="168" r="7" fill="#7a3ab0" opacity="0.8"/>
+    </g>
+    <polygon points="180,30 118,172 192,190" fill="url(#fA)"/>
+    <polygon points="180,30 192,190 242,172" fill="url(#fB)"/>
+    <polygon points="180,330 118,172 192,190" fill="url(#fC)"/>
+    <polygon points="180,330 192,190 242,172" fill="url(#fD)"/>
+    <polygon points="180,30 118,172 180,330 242,172" fill="none" stroke="#eafaff" stroke-width="3" stroke-linejoin="round"/>
+    <polyline points="180,30 192,190 180,330" fill="none" stroke="#eafaff" stroke-width="2" stroke-opacity="0.75"/>
+    <polyline points="118,172 192,190 242,172" fill="none" stroke="#eafaff" stroke-width="2" stroke-opacity="0.75"/>
+    <polygon points="172,70 135,165 152,168" fill="#ffffff" opacity="0.5"/>
+    <!-- front half of the orbit -->
+    <path d="M 320 155 A 140 46 -18 0 1 40 205" fill="none" stroke="url(#gold)" stroke-width="5"/>
+    <!-- elemental dots: fire ice wind earth lightning water light dark -->
+    <g stroke="#0b1330" stroke-width="2">
+      <circle cx="52"  cy="226" r="9" fill="#ff4a3a"/>
+      <circle cx="110" cy="243" r="9" fill="#9fe6ff"/>
+      <circle cx="190" cy="232" r="9" fill="#4be07a"/>
+      <circle cx="268" cy="203" r="9" fill="#e0a84a"/>
+      <circle cx="318" cy="168" r="9" fill="#b46bff"/>
+    </g>
+  </g>
+
+  <!-- wordmark -->
+  <text x="390" y="200" font-family="Cinzel" font-weight="700" font-size="132" letter-spacing="10" fill="url(#gold)">FFXI<tspan font-weight="400" dx="4" fill="#cfe9ff">-</tspan><tspan font-weight="400" dx="4" fill="#eaf6ff">LINUX</tspan></text>
+  <line x1="394" y1="236" x2="1370" y2="236" stroke="url(#gold)" stroke-width="2" stroke-opacity="0.7"/>
+  <text x="396" y="292" font-family="Fira Sans" font-weight="300" font-size="40" letter-spacing="19" fill="#cfe2f5">NATIVE CLIENT PROJECT</text>
+</svg>

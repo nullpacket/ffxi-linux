@@ -1,0 +1,107 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "rt_common.glsl"
+
+// --rt (goal 38): pass 0 accumulates the traced terms over time (reprojected by depth, rejected where the history does
+// not match), pass 1 smooths them over a depth- and normal-aware 5x5 neighbourhood.
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0) uniform sampler2D inA;
+layout(set = 0, binding = 1) uniform sampler2D inB;
+layout(set = 0, binding = 2) uniform sampler2D inC;
+layout(set = 0, binding = 3) uniform sampler2D histA;
+layout(set = 0, binding = 4) uniform sampler2D histB;
+layout(set = 0, binding = 5) uniform sampler2D histC;
+layout(set = 0, binding = 6, rgba16f) uniform writeonly image2D outA;
+layout(set = 0, binding = 7, rgba16f) uniform writeonly image2D outB;
+layout(set = 0, binding = 8, rgba16f) uniform writeonly image2D outC;
+layout(set = 0, binding = 9) uniform sampler2D depthTex;
+
+layout(push_constant) uniform Push
+{
+    Params p;
+    uint   pass;
+} pc;
+
+void main()
+{
+    ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 sz = ivec2(pc.p.size.xy);
+    if (any(greaterThanEqual(px, sz)))
+    {
+        return;
+    }
+    vec4 a = texelFetch(inA, px, 0);
+    vec4 b = texelFetch(inB, px, 0);
+    vec4 c = texelFetch(inC, px, 0);
+    if (b.w <= 0.0) // sky
+    {
+        imageStore(outA, px, a);
+        imageStore(outB, px, b);
+        imageStore(outC, px, c);
+        return;
+    }
+    if (pc.pass == 0u)
+    {
+        float d  = texelFetch(depthTex, px, 0).r;
+        vec2  uv = (vec2(px) + 0.5) * pc.p.size.zw;
+        vec3  w  = worldAt(pc.p, uv, d);
+        vec4  pp = pc.p.prevViewProj * vec4(w, 1.0);
+        vec2  pu = pp.xy / pp.w * 0.5 + 0.5;
+        bool  ok = pc.p.opts.w == 0u && pp.w > 0.0 && all(greaterThanEqual(pu, vec2(0.0))) && all(lessThanEqual(pu, vec2(1.0)));
+        if (ok)
+        {
+            vec4 ha = textureLod(histA, pu, 0.0);
+            vec4 hb = textureLod(histB, pu, 0.0);
+            vec4 hc = textureLod(histC, pu, 0.0);
+            ok      = hb.w > 0.0 && abs(hb.w - pp.w) < 0.04 * pp.w && dot(octDecode(ha.zw), octDecode(a.zw)) > 0.8;
+            if (ok)
+            {
+                const float k = 0.12;
+                a.xy  = mix(ha.xy, a.xy, k);
+                b.rgb = mix(hb.rgb, b.rgb, k);
+                c.a   = mix(hc.a, c.a, k);
+            }
+        }
+        imageStore(outA, px, a);
+        imageStore(outB, px, b);
+        imageStore(outC, px, c);
+        return;
+    }
+    // Spatial.
+    vec3  n    = octDecode(a.zw);
+    vec2  sumA = vec2(0.0);
+    vec3  sumB = vec3(0.0);
+    float sumC = 0.0, wsum = 0.0;
+    for (int y = -2; y <= 2; ++y)
+    {
+        for (int x = -2; x <= 2; ++x)
+        {
+            ivec2 q  = clamp(px + ivec2(x, y) * 2, ivec2(0), sz - 1);
+            vec4  qa = texelFetch(inA, q, 0);
+            vec4  qb = texelFetch(inB, q, 0);
+            if (qb.w <= 0.0)
+            {
+                continue;
+            }
+            float wz = exp(-abs(qb.w - b.w) / max(0.03 * b.w, 1e-3));
+            float wn = pow(max(dot(octDecode(qa.zw), n), 0.0), 16.0);
+            float wg = exp(-float(x * x + y * y) / 4.5);
+            float wt = wz * wn * wg;
+            sumA += qa.xy * wt;
+            sumB += qb.rgb * wt;
+            sumC += texelFetch(inC, q, 0).a * wt;
+            wsum += wt;
+        }
+    }
+    if (wsum > 1e-4)
+    {
+        a.xy  = sumA / wsum;
+        b.rgb = sumB / wsum;
+        c.a   = sumC / wsum;
+    }
+    imageStore(outA, px, a);
+    imageStore(outB, px, b);
+    imageStore(outC, px, c);
+}

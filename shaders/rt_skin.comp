@@ -1,0 +1,40 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#version 460
+#extension GL_EXT_buffer_reference : require
+
+// --rt (goal 38): the drawn characters skinned into a position buffer for their acceleration structures, as
+// skinned.vert does it (two bones, weights folded into the bone-local positions; docs/dat-format.md §10.3).
+layout(local_size_x = 64) in;
+
+layout(buffer_reference, std430) readonly buffer Verts { float f[]; }; // SkinnedVertex, 16 floats
+layout(buffer_reference, std430) readonly buffer Bones { mat4 m[]; };
+layout(buffer_reference, std430) writeonly buffer Out { float f[]; };
+
+layout(push_constant) uniform Push
+{
+    Verts verts;
+    Bones bones;
+    Out   dst;
+    uint  boneBase;
+    uint  count;
+} pc;
+
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= pc.count)
+    {
+        return;
+    }
+    uint  o  = i * 16u;
+    vec3  p0 = vec3(pc.verts.f[o], pc.verts.f[o + 1u], pc.verts.f[o + 2u]);
+    vec3  p1 = vec3(pc.verts.f[o + 3u], pc.verts.f[o + 4u], pc.verts.f[o + 5u]);
+    uint  b  = floatBitsToUint(pc.verts.f[o + 14u]);
+    float w1 = pc.verts.f[o + 15u];
+    mat4  b0 = pc.bones.m[pc.boneBase + (b & 0xFFu)];
+    mat4  b1 = pc.bones.m[pc.boneBase + ((b >> 8) & 0xFFu)];
+    vec4  w  = b0 * vec4(p0, 1.0 - w1) + b1 * vec4(p1, w1);
+    pc.dst.f[i * 3u]      = w.x;
+    pc.dst.f[i * 3u + 1u] = w.y;
+    pc.dst.f[i * 3u + 2u] = w.z;
+}

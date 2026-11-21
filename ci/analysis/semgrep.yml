@@ -1,0 +1,110 @@
+# The repo's own semgrep rules for CI's analysis:sast job (tools/ci/analysis.py; docs/ci.md "Analysis"). They
+# target the bug classes this client has actually had or is exposed to: text and numbers from the server, the DATs and
+# Lua addons reaching code that throws, overflows or runs commands. Existing hits: ci/analysis/baseline/semgrep.json.
+# Silence one line with a trailing `// nosemgrep: <rule id>` and a reason.
+rules:
+  - id: json-dump-throws-on-bad-utf8
+    languages: [cpp]
+    severity: ERROR
+    message: >-
+      nlohmann::json::dump() throws type_error.316 on invalid UTF-8 (game text is Shift-JIS; #98, #106). Pass
+      error_handler_t::replace: dump(-1, ' ', false, nlohmann::json::error_handler_t::replace).
+    patterns:
+      - pattern-either:
+          - pattern: $J.dump()
+          - pattern: $J.dump($I)
+          - pattern: $J.dump($I, $C)
+          - pattern: $J.dump($I, $C, $A)
+  - id: fmt-runtime-format-string
+    languages: [cpp]
+    severity: WARNING
+    message: >-
+      A format string built at run time: braces in server, DAT or addon text make fmt throw format_error (or print the
+      wrong thing). Pass the text as an argument: fmt::format("{}", text).
+    pattern-either:
+      - pattern: fmt::runtime(...)
+      - pattern: fmt::vformat(...)
+      - pattern: spdlog::$LVL(fmt::runtime(...), ...)
+  - id: spdlog-non-literal-format
+    languages: [cpp]
+    severity: WARNING
+    message: >-
+      The only argument to a spdlog call is not a string literal, so it is used as the format string: braces in it
+      throw. Log it as spdlog::$LVL("{}", $X).
+    patterns:
+      - pattern: spdlog::$LVL($X)
+      - metavariable-regex:
+          metavariable: $LVL
+          regex: ^(trace|debug|info|warn|error|critical)$
+      - metavariable-pattern:
+          metavariable: $X
+          patterns:
+            - pattern-not: '"..."'
+  - id: unbounded-c-string-copy
+    languages: [c, cpp]
+    severity: ERROR
+    message: Unbounded C string copy or format (overflows on long input). Use std::string, fmt, or a sized copy.
+    pattern-either:
+      - pattern: strcpy(...)
+      - pattern: strcat(...)
+      - pattern: sprintf(...)
+      - pattern: vsprintf(...)
+      - pattern: gets(...)
+      - pattern: std::strcpy(...)
+      - pattern: std::strcat(...)
+      - pattern: std::sprintf(...)
+  - id: shell-command
+    languages: [c, cpp]
+    severity: WARNING
+    message: >-
+      Runs a shell command line: anything from a path, a name or an addon spliced into it is a command injection.
+      Prefer posix_spawn / execvp with an argument vector.
+    pattern-either:
+      - pattern: system(...)
+      - pattern: std::system(...)
+      - pattern: popen(...)
+  - id: string-to-number-throws
+    languages: [cpp]
+    severity: WARNING
+    message: >-
+      std::stoi / stol / stoul / stof throw on text that is not a number or out of range; on server, DAT or addon text
+      that ends the session. Use std::from_chars (or catch).
+    pattern-either:
+      - pattern: std::stoi(...)
+      - pattern: std::stol(...)
+      - pattern: std::stoll(...)
+      - pattern: std::stoul(...)
+      - pattern: std::stoull(...)
+      - pattern: std::stof(...)
+      - pattern: std::stod(...)
+  - id: unchecked-number-parse
+    languages: [c, cpp]
+    severity: INFO
+    message: atoi / atof report no errors and are undefined on overflow; std::from_chars says whether it parsed.
+    pattern-either:
+      - pattern: atoi(...)
+      - pattern: atol(...)
+      - pattern: atof(...)
+      - pattern: std::atoi(...)
+      - pattern: std::atol(...)
+      - pattern: std::atof(...)
+  - id: reinterpret-cast-read
+    languages: [cpp]
+    severity: WARNING
+    message: >-
+      Reading through a reinterpret_cast pointer into a byte buffer is unaligned / aliasing undefined behaviour on
+      packet and DAT data. Use the load<T>() helpers (xi/bytes.h) or std::memcpy / std::bit_cast.
+    pattern-either:
+      - pattern: '*reinterpret_cast<const $T*>($B)'
+      - pattern: '*reinterpret_cast<$T*>($B)'
+      - pattern: 'reinterpret_cast<const $T*>($B)->$F'
+      - pattern: 'reinterpret_cast<$T*>($B)->$F'
+  - id: weak-random
+    languages: [c, cpp]
+    severity: INFO
+    message: rand() is a weak, shared-state generator; use <random> (std::mt19937 seeded from std::random_device).
+    pattern-either:
+      - pattern: rand()
+      - pattern: std::rand()
+      - pattern: srand(...)
+      - pattern: std::srand(...)
